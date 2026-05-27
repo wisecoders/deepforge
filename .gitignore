@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.deepforge/
+*.db
+*.db-journal
+.env
+.env.local
