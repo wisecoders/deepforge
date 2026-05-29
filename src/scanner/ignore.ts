@@ -51,7 +51,7 @@ export function createIgnoreFilter(
   projectRoot: string,
   extraPatterns: string[] = [],
 ): IgnoreFilter {
-  const patterns = [...DEFAULT_IGNORE, ...extraPatterns];
+  const rawPatterns = [...DEFAULT_IGNORE, ...extraPatterns];
 
   const gitignorePath = join(projectRoot, ".gitignore");
   try {
@@ -59,22 +59,40 @@ export function createIgnoreFilter(
     for (const line of content.split("\n")) {
       const trimmed = line.trim();
       if (trimmed && !trimmed.startsWith("#")) {
-        patterns.push(trimmed);
+        rawPatterns.push(trimmed);
       }
     }
   } catch {
     // No .gitignore — use defaults only
   }
 
-  const matchers = patterns.map(compilePattern);
+  const ignoreMatchers: Matcher[] = [];
+  const negationMatchers: Matcher[] = [];
+
+  for (const pattern of rawPatterns) {
+    if (pattern.startsWith("!")) {
+      negationMatchers.push(compilePattern(pattern.slice(1)));
+    } else {
+      ignoreMatchers.push(compilePattern(pattern));
+    }
+  }
 
   return {
     isIgnored(relativePath: string): boolean {
       const segments = relativePath.split("/");
-      for (const matcher of matchers) {
-        if (matcher(relativePath, segments)) return true;
+      let ignored = false;
+      for (const matcher of ignoreMatchers) {
+        if (matcher(relativePath, segments)) {
+          ignored = true;
+          break;
+        }
       }
-      return false;
+      if (ignored) {
+        for (const matcher of negationMatchers) {
+          if (matcher(relativePath, segments)) return false;
+        }
+      }
+      return ignored;
     },
   };
 }
@@ -82,15 +100,30 @@ export function createIgnoreFilter(
 type Matcher = (path: string, segments: string[]) => boolean;
 
 function compilePattern(pattern: string): Matcher {
-  let p = pattern.replace(/\/$/, "");
-  const negated = p.startsWith("!");
-  if (negated) p = p.slice(1);
+  const p = pattern.replace(/\/$/, "");
 
   // Simple glob: *.ext
   if (p.startsWith("*.")) {
     const ext = p.slice(1);
-    const check: Matcher = (path) => path.endsWith(ext);
-    return negated ? (path, segs) => !check(path, segs) : check;
+    return (path) => path.endsWith(ext);
+  }
+
+  // Bracket expression patterns like [Dd]ebug
+  if (p.includes("[")) {
+    const regex = new RegExp(
+      "^" +
+        p
+          .replace(/[.+^${}()|\\]/g, "\\$&")
+          .replace(/\*\*/g, "<<DOUBLESTAR>>")
+          .replace(/\*/g, "[^/]*")
+          .replace(/<<DOUBLESTAR>>/g, ".*")
+          .replace(/\?/g, "[^/]") +
+        "(/.*)?$",
+    );
+    if (!p.includes("/")) {
+      return (_path, segments) => segments.some((s) => regex.test(s));
+    }
+    return (path) => regex.test(path);
   }
 
   // Double-star patterns: **/foo or foo/**/bar
@@ -104,13 +137,11 @@ function compilePattern(pattern: string): Matcher {
           .replace(/\?/g, "[^/]") +
         "(/.*)?$",
     );
-    const check: Matcher = (path) => regex.test(path);
-    return negated ? (path, segs) => !check(path, segs) : check;
+    return (path) => regex.test(path);
   }
 
   // Bare name: match any path segment
   if (!p.includes("/")) {
-    // Also handle wildcard in bare name: *.generated.*
     if (p.includes("*") || p.includes("?")) {
       const regex = new RegExp(
         "^" +
@@ -120,14 +151,9 @@ function compilePattern(pattern: string): Matcher {
             .replace(/\?/g, "[^/]") +
           "$",
       );
-      const check: Matcher = (_path, segments) =>
-        segments.some((s) => regex.test(s));
-      return negated
-        ? (path, segs) => !check(path, segs)
-        : check;
+      return (_path, segments) => segments.some((s) => regex.test(s));
     }
-    const check: Matcher = (_path, segments) => segments.includes(p);
-    return negated ? (path, segs) => !check(path, segs) : check;
+    return (_path, segments) => segments.includes(p);
   }
 
   // Path pattern with slashes
@@ -139,6 +165,5 @@ function compilePattern(pattern: string): Matcher {
         .replace(/\?/g, "[^/]") +
       "(/.*)?$",
   );
-  const check: Matcher = (path) => regex.test(path);
-  return negated ? (path, segs) => !check(path, segs) : check;
+  return (path) => regex.test(path);
 }

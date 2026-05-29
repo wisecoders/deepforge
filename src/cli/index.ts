@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 import { scanProject } from "../scanner/index.js";
 import { extractProject } from "../extraction/index.js";
 import { resolveReferences } from "../resolution/index.js";
@@ -27,7 +28,7 @@ program
   .option("--base-url <url>", "LLM base URL (for ollama)")
   .action(async (projectPath: string, options) => {
     const root = resolve(projectPath);
-    const dbPath = resolve(root, ".deepforge/graph.db");
+    const dbPath = ensureDbDir(root);
 
     const store = new GraphStore(dbPath);
 
@@ -59,7 +60,7 @@ program
   .description("Index a codebase into a knowledge graph (no wiki generation)")
   .action(async (projectPath: string) => {
     const root = resolve(projectPath);
-    const dbPath = resolve(root, ".deepforge/graph.db");
+    const dbPath = ensureDbDir(root);
     const store = new GraphStore(dbPath);
     try {
       await runIndex(root, store);
@@ -73,7 +74,7 @@ program
   .description("Show knowledge graph statistics")
   .action(async (projectPath: string) => {
     const root = resolve(projectPath);
-    const dbPath = resolve(root, ".deepforge/graph.db");
+    const dbPath = ensureDbDir(root);
     const store = new GraphStore(dbPath);
     try {
       const stats = store.getStats();
@@ -115,7 +116,7 @@ program
   .option("-k, --top-k <number>", "Number of results", "10")
   .action(async (projectPath: string, query: string, options) => {
     const root = resolve(projectPath);
-    const dbPath = resolve(root, ".deepforge/graph.db");
+    const dbPath = ensureDbDir(root);
     const store = new GraphStore(dbPath);
     try {
       const results = store.searchNodes(query, {
@@ -142,9 +143,13 @@ program
     }
   });
 
+function ensureDbDir(root: string): string {
+  const dbDir = resolve(root, ".deepforge");
+  mkdirSync(dbDir, { recursive: true });
+  return resolve(dbDir, "graph.db");
+}
+
 async function runIndex(root: string, store: GraphStore): Promise<void> {
-  const { mkdirSync } = await import("node:fs");
-  mkdirSync(resolve(root, ".deepforge"), { recursive: true });
 
   console.log(`Scanning ${root}...`);
   const files = scanProject(root);
