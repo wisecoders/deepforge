@@ -34,8 +34,37 @@ export interface LanguageExtractor {
 /** Registry of all available extractors, keyed by language. */
 const registry = new Map<Language, LanguageExtractor>();
 
-/** Map from file extension to language. */
-const extensionMap = new Map<string, Language>();
+/** Static extension→language mapping (always available). */
+const STATIC_EXTENSIONS: Record<string, Language> = {
+  ts: "typescript",
+  tsx: "tsx",
+  mts: "typescript",
+  cts: "typescript",
+  js: "javascript",
+  jsx: "jsx",
+  mjs: "javascript",
+  cjs: "javascript",
+  py: "python",
+  pyi: "python",
+  go: "go",
+  rs: "rust",
+  java: "java",
+  cs: "csharp",
+  kt: "kotlin",
+  swift: "swift",
+  rb: "ruby",
+  php: "php",
+  cpp: "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  h: "c",
+  c: "c",
+};
+
+/** Map from file extension to language (extended by registered extractors). */
+const extensionMap = new Map<string, Language>(
+  Object.entries(STATIC_EXTENSIONS),
+);
 
 /**
  * Register a language extractor.
