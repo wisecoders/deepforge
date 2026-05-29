@@ -73,26 +73,41 @@ async function createOpenAIProvider(config: LlmConfig): Promise<LlmProvider> {
 async function createOllamaProvider(config: LlmConfig): Promise<LlmProvider> {
   const baseUrl = config.baseUrl ?? "http://localhost:11434";
   const model = config.model ?? "llama3";
+  const maxRetries = 3;
+  const timeoutMs = 10 * 60 * 1000; // 10 minutes
 
   return {
     name: "ollama",
     async generate(prompt, options = {}) {
-      const response = await fetch(`${baseUrl}/api/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model,
-          prompt: options.systemPrompt
-            ? `${options.systemPrompt}\n\n${prompt}`
-            : prompt,
-          stream: false,
-          options: {
-            num_predict: options.maxTokens ?? config.maxTokensPerPage ?? 4096,
-          },
-        }),
+      const body = JSON.stringify({
+        model,
+        prompt: options.systemPrompt
+          ? `${options.systemPrompt}\n\n${prompt}`
+          : prompt,
+        stream: false,
+        options: {
+          num_predict: options.maxTokens ?? config.maxTokensPerPage ?? 4096,
+        },
       });
-      const data = (await response.json()) as { response: string };
-      return data.response;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          const response = await fetch(`${baseUrl}/api/generate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          const data = (await response.json()) as { response: string };
+          return data.response;
+        } catch (err) {
+          if (attempt === maxRetries) throw err;
+        }
+      }
+      throw new Error("Ollama request failed after retries");
     },
   };
 }
