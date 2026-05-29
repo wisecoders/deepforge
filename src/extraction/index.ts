@@ -7,6 +7,7 @@ import { initTreeSitter, getParser, parseSource } from "./tree-sitter.js";
 // Register extractors on import
 import "./languages/typescript.js";
 import "./languages/python.js";
+import "./languages/csharp.js";
 
 export interface ExtractionSummary {
   totalFiles: number;

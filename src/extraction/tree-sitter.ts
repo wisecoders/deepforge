@@ -14,6 +14,7 @@ const GRAMMAR_MAP: Record<string, string> = {
   tsx: "tree-sitter-tsx.wasm",
   jsx: "tree-sitter-tsx.wasm",
   python: "tree-sitter-python.wasm",
+  csharp: "tree-sitter-c_sharp.wasm",
 };
 
 let initialized = false;
