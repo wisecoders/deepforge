@@ -11,6 +11,10 @@ export interface WikiPage {
 
 export interface AssembleOptions {
   stats?: GraphStats;
+  /** Repo URL — embedded in wiki for resync link */
+  repoUrl?: string;
+  /** Controller base URL — for the resync button */
+  controllerUrl?: string;
 }
 
 export function assembleWiki(
@@ -35,7 +39,10 @@ export function assembleWiki(
 
   // Generate docsify files for browseable wiki
   writeFileSync(join(outputDir, "_sidebar.md"), buildSidebar(structure, pages));
-  writeFileSync(join(outputDir, "index.html"), buildDocsifyHtml(structure.title));
+  writeFileSync(
+    join(outputDir, "index.html"),
+    buildDocsifyHtml(structure.title, options?.repoUrl, options?.controllerUrl),
+  );
   writeFileSync(join(outputDir, ".nojekyll"), "");
 }
 
@@ -155,13 +162,45 @@ function buildSidebar(structure: WikiStructure, pages: WikiPage[]): string {
   return md;
 }
 
-function buildDocsifyHtml(title: string): string {
+function buildDocsifyHtml(title: string, repoUrl?: string, controllerUrl?: string): string {
+  const generatedAt = new Date().toISOString();
+
+  // Build the resync banner — only if we know the controller URL
+  const bannerCss = `
+    #deepforge-banner {
+      position: fixed; top: 0; right: 0; z-index: 9999;
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 12px; color: #666;
+      background: rgba(255,255,255,0.95);
+      border-bottom-left-radius: 8px;
+      box-shadow: -2px 2px 8px rgba(0,0,0,0.1);
+    }
+    #deepforge-banner .resync-btn {
+      padding: 4px 12px; background: #3F51B5; color: white;
+      border: none; border-radius: 4px; cursor: pointer;
+      font-size: 12px; text-decoration: none;
+    }
+    #deepforge-banner .resync-btn:hover { background: #303F9F; }`;
+
+  const bannerHtml =
+    repoUrl && controllerUrl
+      ? `
+  <div id="deepforge-banner">
+    <span style="opacity:0.7">Last synced: ${new Date(generatedAt).toLocaleDateString()} ${new Date(generatedAt).toLocaleTimeString()}</span>
+    <a class="resync-btn" href="${controllerUrl}/?repo=${encodeURIComponent(repoUrl)}" title="Re-generate wiki from latest source">&#x21bb; Resync</a>
+  </div>`
+      : "";
+
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>${title}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="deepforge:generated-at" content="${generatedAt}">
+  ${repoUrl ? `<meta name="deepforge:repo-url" content="${repoUrl}">` : ""}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.css">
   <style>
     :root {
@@ -169,12 +208,12 @@ function buildDocsifyHtml(title: string): string {
       --theme-color: #3F51B5;
       --sidebar-width: 280px;
     }
-    .markdown-section pre > code {
-      font-size: 13px;
-    }
+    .markdown-section pre > code { font-size: 13px; }
+    ${bannerCss}
   </style>
 </head>
 <body>
+  ${bannerHtml}
   <div id="app"></div>
   <script>
     window.$docsify = {
@@ -184,6 +223,7 @@ function buildDocsifyHtml(title: string): string {
       search: 'auto',
       auto2top: true,
       mergeNavbar: true,
+      homepage: 'index.md',
     };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>

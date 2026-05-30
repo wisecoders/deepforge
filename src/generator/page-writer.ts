@@ -61,8 +61,12 @@ Describe how this module connects to other parts of the system:
 
 WRITING RULES:
 - Write 1000-2000 words of technical prose. Be specific, precise, and informative.
-- Include 0-1 Mermaid diagrams ONLY when a visual genuinely clarifies complex relationships or flows. Do not force diagrams where prose suffices.
-- Prefer short inline code snippets (3-10 lines) over diagrams — showing real code is more valuable than abstract diagrams.
+- Include EXACTLY 1 Mermaid diagram per page. Choose the most appropriate type for the topic:
+  - classDiagram for pages about entities, aggregates, domain models, or class hierarchies
+  - sequenceDiagram for pages about request flows, service interactions, or multi-step processes
+  - flowchart TD for pages about pipelines, middleware chains, configuration loading, or data flow
+  Place the diagram in the most relevant topic section (not at the top and not at the bottom).
+- Also include short inline code snippets (3-10 lines) — code and diagrams serve different purposes.
 - Tables must contain REAL method/class names and REAL file paths from the reference data provided.
 - Every technical claim must be traceable to a source file. Use paths exactly as shown in the reference data.
 - Do NOT use generic placeholder names like "FileName.cs" — always use the actual path such as \`src/ApplicationCore/Services/OrderService.cs:34\`.
@@ -87,13 +91,15 @@ TABLE FORMATTING:
 - Include a "Source" or "Location" column with the file path and line range where the item is defined.
 - Sort table rows by importance or logical grouping, not alphabetically.
 
-MERMAID DIAGRAM GUIDELINES (when used):
-- Use classDiagram for inheritance and composition relationships.
-- Use sequenceDiagram for request/response flows and multi-step processes.
-- Use flowchart TD for data pipelines and processing stages.
-- Keep diagrams focused — maximum 8-10 nodes. Omit trivial relationships.
-- Label edges with the method or event name that triggers the interaction.
-- Every node in the diagram must correspond to a real class, interface, or component from the codebase.`;
+MERMAID DIAGRAM RULES (mandatory — every page MUST have exactly one):
+- Pick the single best visualization for this page's content. Do NOT include more than one diagram.
+- Use classDiagram for inheritance/composition: show base classes, interfaces, and concrete implementations with their key methods.
+- Use sequenceDiagram for flows: show the actors (Controller, Service, Repository, etc.) and the method calls between them.
+- Use flowchart TD for pipelines/processes: show the stages and decision points.
+- Keep diagrams focused — 4-8 nodes maximum. Show only architecturally significant relationships.
+- Label edges with real method or event names from the codebase (e.g., "CreateOrderAsync()" not "creates").
+- Every node must correspond to a real class, interface, or component from the reference data.
+- Use \`\`\`mermaid fenced code blocks. Ensure valid Mermaid syntax (no trailing commas, proper quoting).`;
 
   const prompt = `Write the wiki page for section "${context.number}. ${context.title}".
 

@@ -17,7 +17,7 @@ import { extractProject } from "../extraction/index.js";
 import { resolveReferences } from "../resolution/index.js";
 import { GraphStore } from "../store/index.js";
 import { generateWiki } from "../generator/index.js";
-import type { LlmConfig } from "../types.js";
+import { resolveConfigFromEnv } from "../llm/index.js";
 
 const program = new Command();
 
@@ -31,10 +31,10 @@ program
   .description("Index a codebase and generate wiki documentation")
   .option("-o, --output <path>", "Output directory for wiki files", "./wiki")
   .option("--skip-index", "Skip indexing, use existing graph database")
-  .option("--provider <provider>", "LLM provider: claude, openai, ollama", "claude")
+  .option("--provider <provider>", "LLM provider: claude, openai, azure, ollama (or set LLM_PROVIDER in .env)")
   .option("--model <model>", "LLM model name")
-  .option("--api-key <key>", "LLM API key (or set env var)")
-  .option("--base-url <url>", "LLM base URL (for ollama)")
+  .option("--api-key <key>", "LLM API key (or set provider-specific env var)")
+  .option("--base-url <url>", "LLM base URL (for ollama/azure)")
   .option("--concurrency <n>", "Parallel page generation (default: 3)", "3")
   .action(async (projectPath: string, options) => {
     const root = resolve(projectPath);
@@ -47,12 +47,12 @@ program
         await runIndex(root, store);
       }
 
-      const llmConfig: LlmConfig = {
+      const llmConfig = resolveConfigFromEnv({
         provider: options.provider,
         model: options.model,
-        apiKey: options.apiKey ?? process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY,
+        apiKey: options.apiKey,
         baseUrl: options.baseUrl,
-      };
+      });
 
       await generateWiki(store, {
         outputDir: resolve(options.output),

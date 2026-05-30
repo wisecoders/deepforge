@@ -460,11 +460,15 @@ export interface DeepforgeConfig {
  * LLM provider configuration.
  */
 export interface LlmConfig {
-  provider: "claude" | "openai" | "ollama";
+  provider: "claude" | "openai" | "azure" | "ollama";
   model?: string;
   apiKey?: string;
   baseUrl?: string;
   maxTokensPerPage?: number;
+  /** Azure OpenAI deployment name (required for azure provider) */
+  azureDeployment?: string;
+  /** Azure OpenAI API version (default: 2024-06-01) */
+  azureApiVersion?: string;
 }
 
 /**
