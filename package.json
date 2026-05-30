@@ -24,6 +24,7 @@
   "dependencies": {
     "better-sqlite3": "^11.0.0",
     "commander": "^13.0.0",
+    "dotenv": "^17.4.2",
     "tree-sitter-c-sharp": "^0.23.5",
     "tree-sitter-python": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2",

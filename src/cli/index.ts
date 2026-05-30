@@ -1,5 +1,14 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+// Load .env manually (tsx's built-in dotenv is unreliable)
+try {
+  for (const line of readFileSync(".env", "utf-8").split("\n")) {
+    const match = line.match(/^([^#=]+)=(.*)$/);
+    if (match && !process.env[match[1]]) process.env[match[1]] = match[2].trim();
+  }
+} catch {}
+
 import { Command } from "commander";
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
@@ -26,6 +35,7 @@ program
   .option("--model <model>", "LLM model name")
   .option("--api-key <key>", "LLM API key (or set env var)")
   .option("--base-url <url>", "LLM base URL (for ollama)")
+  .option("--concurrency <n>", "Parallel page generation (default: 3)", "3")
   .action(async (projectPath: string, options) => {
     const root = resolve(projectPath);
     const dbPath = ensureDbDir(root);
@@ -48,6 +58,7 @@ program
         outputDir: resolve(options.output),
         projectRoot: root,
         llmConfig,
+        concurrency: parseInt(options.concurrency, 10),
         onProgress: (msg) => console.log(`  ${msg}`),
       });
     } finally {

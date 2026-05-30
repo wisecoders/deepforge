@@ -37,86 +37,74 @@ export async function planWikiStructure(
 
   const inheritanceInfo = buildInheritanceSummary(store, topLevelSymbols);
 
-  const prompt = `You are analyzing a codebase to plan comprehensive technical wiki documentation.
+  const prompt = `Analyze this codebase and generate a wiki table of contents.
 
-## Codebase Statistics
+## Codebase Info
 - ${stats.fileCount} files, ${stats.nodeCount} symbols, ${stats.edgeCount} relationships
 - Languages: ${Object.entries(stats.filesByLanguage).map(([l, c]) => `${l} (${c})`).join(", ")}
-- Symbol breakdown: ${Object.entries(stats.nodesByKind).map(([k, c]) => `${c} ${k}s`).join(", ")}
+- Symbols: ${Object.entries(stats.nodesByKind).map(([k, c]) => `${c} ${k}s`).join(", ")}
 
-## Project Directory Structure
+## Directory Structure
 ${dirTree}
 
-## Files (first 80)
-${fileSummary}
-
-## Key Symbols (classes, interfaces, enums, namespaces)
+## Key Symbols
 ${symbolSummary}
 
-## Inheritance Relationships
+## Inheritance
 ${inheritanceInfo}
 
-## Instructions
-Generate a comprehensive table of contents for a technical wiki, similar to what DeepWiki.com produces.
+## REQUIREMENTS
 
-Requirements:
-1. Generate 8-12 top-level sections covering ALL major architectural concerns
-2. Each section should have 2-5 subsections for detailed coverage
-3. Always include these kinds of sections:
-   - Overview (architecture, tech stack, project structure)
-   - Domain/data model (entities, value objects, relationships)
-   - Core business logic (services, handlers, specifications)
-   - Infrastructure (data access, repositories, external integrations)
-   - API layer (endpoints, controllers, request/response flow)
-   - UI/Frontend (if applicable: views, components, pages)
-   - Configuration & deployment (settings, docker, CI/CD)
-   - Testing (test organization, strategies)
-4. Group related files and symbols into coherent sections
-5. Each section/subsection description should be specific about what code it covers
-6. For relevantSymbolIds, include IDs of the most important symbols for that section
+Generate 8-12 sections organized by CONCEPT (not by directory). Each section needs 2-4 subsections.
 
-Return ONLY valid JSON in this exact format:
-{
-  "title": "Project Name — Technical Wiki",
-  "description": "2-3 sentence project description explaining what the project does and its architecture",
-  "sections": [
-    {
-      "number": "1",
-      "title": "Section Title",
-      "description": "Specific description of what code and concepts this section covers",
-      "relevantSymbolIds": [],
-      "subsections": [
-        {
-          "number": "1.1",
-          "title": "Subsection Title",
-          "description": "Specific description",
-          "relevantSymbolIds": []
-        }
-      ]
-    }
-  ]
-}`;
+CRITICAL: Do NOT organize by folder name. Do NOT use generic titles like "Classes & Services".
+Instead, organize by architectural concept and feature domain.
+
+Example structure for a web app:
+1. Overview → Architecture, Tech Stack, Project Structure
+2. Domain Model → Entities, Value Objects, Aggregates
+3. Core Services → Order Processing, Basket Management, Catalog Service
+4. Data Access → Repository Pattern, Database Contexts, Migrations
+5. Web Application → Controllers, Views & Razor Pages, Authentication
+6. API Layer → Endpoint Architecture, Catalog Endpoints, User Management
+7. Admin UI → Components, State Management, CRUD Operations
+8. Shopping Features → Basket Flow, Checkout Process, Order Lifecycle
+9. Configuration → App Settings, Dependency Injection, Environment Config
+10. Testing → Unit Tests, Integration Tests, Functional Tests
+11. Deployment → Docker, CI/CD, Azure
+
+Return ONLY valid JSON (no markdown fences, no commentary before/after):
+{"title":"Project Name — Technical Wiki","description":"2-3 sentences about what this project does","sections":[{"number":"1","title":"Section Title","description":"What this section covers","relevantSymbolIds":[],"subsections":[{"number":"1.1","title":"Subsection Title","description":"Specific description","relevantSymbolIds":[]}]}]}`;
 
   const response = await provider.generate(prompt, {
     systemPrompt:
-      "You are a technical documentation architect. Analyze the codebase structure and produce a comprehensive wiki table of contents as JSON. Be thorough — cover every major module and architectural layer. Return only valid JSON, no markdown fences or commentary.",
+      "You are a technical documentation architect. Analyze the codebase structure and produce a comprehensive wiki table of contents as JSON. Organize by CONCEPT not by directory. Keep descriptions concise (under 20 words each). Return only valid JSON, no markdown fences or commentary.",
     temperature: 0.3,
-    maxTokens: 4096,
+    maxTokens: 8192,
   });
 
   try {
-    const cleaned = response
+    // Robust JSON extraction — handle markdown fences, preamble, trailing text
+    let cleaned = response
       .replace(/```json\n?/g, "")
       .replace(/```\n?/g, "")
-      .replace(/^[^{]*/, "")
-      .replace(/[^}]*$/, "")
       .trim();
+    // Find the first { and last } to extract JSON
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
     const parsed = JSON.parse(cleaned) as WikiStructure;
     if (!parsed.sections || parsed.sections.length < 3) {
+      console.error("  [planner] LLM returned < 3 sections, using fallback structure");
       return fallbackStructure(files, topLevelSymbols, stats);
     }
     return assignSymbolIds(parsed, topLevelSymbols);
-  } catch {
+  } catch (err) {
+    console.error("  [planner] Failed to parse LLM response as JSON, using fallback structure");
+    console.error("  [planner] Error:", (err as Error).message);
+    console.error("  [planner] Response preview:", response.slice(0, 200));
     return fallbackStructure(files, topLevelSymbols, stats);
   }
 }

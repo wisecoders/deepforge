@@ -11,6 +11,7 @@ export interface GenerateOptions {
   outputDir: string;
   projectRoot: string;
   llmConfig: LlmConfig;
+  concurrency?: number; // parallel page generation (default: 3)
   onProgress?: (message: string) => void;
 }
 
@@ -20,6 +21,7 @@ export async function generateWiki(
 ): Promise<WikiStructure> {
   const log = options.onProgress ?? (() => {});
   const provider = await createProvider(options.llmConfig);
+  const concurrency = options.concurrency ?? 3;
 
   // Step 1: Plan structure
   log("Planning wiki structure...");
@@ -28,53 +30,59 @@ export async function generateWiki(
     (sum, s) => sum + s.subsections.length,
     0,
   );
+  const totalPages = structure.sections.length + totalSubs;
   log(
-    `Planned ${structure.sections.length} sections with ${totalSubs} subsections (${structure.sections.length + totalSubs} pages total)`,
+    `Planned ${structure.sections.length} sections with ${totalSubs} subsections (${totalPages} pages total)`,
   );
 
-  // Step 2: Generate pages
-  const pages: WikiPage[] = [];
-  let pageNum = 0;
-  const totalPages =
-    structure.sections.length + totalSubs;
-
+  // Step 2: Build all page tasks (context assembly is fast, CPU-only)
+  interface PageTask {
+    number: string;
+    title: string;
+    section: typeof structure.sections[0] | typeof structure.sections[0]["subsections"][0];
+  }
+  const tasks: PageTask[] = [];
   for (const section of structure.sections) {
-    pageNum++;
-    log(
-      `[${pageNum}/${totalPages}] Generating: ${section.number}. ${section.title}`,
-    );
-    const context = assemblePageContext(section, store, options.projectRoot);
+    tasks.push({ number: section.number, title: section.title, section });
+    for (const sub of section.subsections) {
+      tasks.push({ number: sub.number, title: sub.title, section: sub });
+    }
+  }
+
+  // Step 3: Generate pages with concurrency pool
+  let completed = 0;
+  const pages: WikiPage[] = new Array(tasks.length);
+
+  async function processTask(idx: number): Promise<void> {
+    const task = tasks[idx];
+    const context = assemblePageContext(task.section, store, options.projectRoot);
     const content = await generatePage(context, provider, {
       wikiStructure: structure,
       store,
     });
-    pages.push({
-      path: pagePathFromNumber(section.number, section.title),
-      title: section.title,
-      number: section.number,
+    pages[idx] = {
+      path: pagePathFromNumber(task.number, task.title),
+      title: task.title,
+      number: task.number,
       content,
-    });
-
-    for (const sub of section.subsections) {
-      pageNum++;
-      log(
-        `[${pageNum}/${totalPages}] Generating: ${sub.number}. ${sub.title}`,
-      );
-      const subContext = assemblePageContext(sub, store, options.projectRoot);
-      const subContent = await generatePage(subContext, provider, {
-        wikiStructure: structure,
-        store,
-      });
-      pages.push({
-        path: pagePathFromNumber(sub.number, sub.title),
-        title: sub.title,
-        number: sub.number,
-        content: subContent,
-      });
-    }
+    };
+    completed++;
+    log(`[${completed}/${totalPages}] Done: ${task.number}. ${task.title}`);
   }
 
-  // Step 3: Assemble
+  // Concurrency-limited execution
+  log(`Generating ${totalPages} pages (concurrency: ${concurrency})...`);
+  const executing = new Set<Promise<void>>();
+  for (let i = 0; i < tasks.length; i++) {
+    const p = processTask(i).then(() => { executing.delete(p); });
+    executing.add(p);
+    if (executing.size >= concurrency) {
+      await Promise.race(executing);
+    }
+  }
+  await Promise.all(executing);
+
+  // Step 4: Assemble
   log("Assembling wiki...");
   const stats = store.getStats();
   assembleWiki(structure, pages, options.outputDir, { stats });

@@ -28,18 +28,42 @@ async function createClaudeProvider(config: LlmConfig): Promise<LlmProvider> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: config.apiKey });
   const model = config.model ?? "claude-sonnet-4-20250514";
+  const maxRetries = 5;
 
   return {
     name: "claude",
     async generate(prompt, options = {}) {
-      const response = await client.messages.create({
-        model,
-        max_tokens: options.maxTokens ?? config.maxTokensPerPage ?? 4096,
-        system: options.systemPrompt ?? "",
-        messages: [{ role: "user", content: prompt }],
-      });
-      const block = response.content[0];
-      return block.type === "text" ? block.text : "";
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await client.messages.create({
+            model,
+            max_tokens: options.maxTokens ?? config.maxTokensPerPage ?? 4096,
+            // Use prompt caching for the system prompt — it's identical across
+            // all page generations, saving ~90% input tokens on cache hits
+            system: options.systemPrompt
+              ? [
+                  {
+                    type: "text" as const,
+                    text: options.systemPrompt,
+                    cache_control: { type: "ephemeral" as const },
+                  },
+                ]
+              : [],
+            messages: [{ role: "user", content: prompt }],
+          });
+          const block = response.content[0];
+          return block.type === "text" ? block.text : "";
+        } catch (err: any) {
+          if (err?.status === 429 && attempt < maxRetries) {
+            // Rate limited — wait with exponential backoff
+            const wait = Math.min(2 ** attempt * 10, 120) * 1000;
+            await new Promise((r) => setTimeout(r, wait));
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw new Error("Claude request failed after retries");
     },
   };
 }

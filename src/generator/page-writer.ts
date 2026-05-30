@@ -12,98 +12,109 @@ export async function generatePage(
   provider: LlmProvider,
   options?: PageWriterOptions,
 ): Promise<string> {
-  const symbolSection = buildSymbolSection(context, options?.store);
-  const relationshipSection = buildRelationshipSection(context, options?.store);
-  const sourceSection = buildSourceSection(context);
+  const symbolSummary = buildSymbolSummary(context, options?.store);
+  const relationshipSummary = buildRelationshipSummary(context, options?.store);
+  const keySourceSnippets = buildKeySourceSnippets(context);
   const callChainSection = buildCallChainSection(context);
   const hierarchySection = buildHierarchySection(context);
   const crossLinks = options?.wikiStructure
     ? buildCrossLinks(context, options.wikiStructure)
     : "";
 
-  const prompt = `Write a comprehensive technical documentation page for a code wiki.
+  // Build the list of relevant source files for the "Relevant Source Files" section
+  const relevantFiles = context.relatedFiles.slice(0, 10);
+  const relevantFilesSection = relevantFiles.length > 0
+    ? relevantFiles.map((f) => `- \`${f}\``).join("\n")
+    : "";
 
-## Page: ${context.number}. ${context.title}
+  const systemPrompt = `You are a senior technical writer creating wiki documentation for a code repository. You produce documentation comparable to DeepWiki.com — comprehensive, specific, and precisely referenced to source code. Your output is ONLY the markdown body of the wiki page — no preamble, no meta-commentary, no conversational text.
 
-## Topic Description
-${context.description}
+OUTPUT FORMAT — follow this structure exactly:
 
-## Symbols to Document
-${symbolSection || "(No specific symbols — write a conceptual overview based on the topic)"}
+## Relevant Source Files
+List the key source files this page documents (provided in the user message — copy them as-is into this section as a bullet list).
 
-## Relationships Between Components
-${relationshipSection || "(none detected)"}
+## Purpose and Scope
+Write 2-3 paragraphs explaining:
+- What this module/component does and what problem it solves
+- Where it fits in the overall application architecture
+- Key design decisions and patterns employed (e.g., Repository Pattern, Domain Events, Specification Pattern, CQRS, Dependency Injection)
+- Why the code is structured this way — what benefits does this design provide
 
-## Source Code
-${sourceSection || "(no source available)"}
+## [Topic-Specific Sections]
+Create 3-5 sections with descriptive ### subheadings appropriate to the topic being documented. For each section:
+- Start with 1-2 paragraphs of explanation about the component's purpose and design rationale
+- Include short inline code snippets (3-10 lines) extracted from the reference data showing key implementation patterns
+- Use markdown tables for listing methods, properties, endpoints, or configuration options with columns like: Name | Type/Parameters | Description | Source Location
+- Cite source files inline using the exact paths from the reference data, formatted as \`src/Path/File.cs:34-58\`
+- Explain HOW components interact and WHY they are designed the way they are
+- For classes: explain their responsibilities, key methods, and how they collaborate with other classes
+- For patterns: explain the pattern, show the concrete implementation, and describe the benefits
+- For flows: describe the step-by-step process with source references at each step
 
-## Call Chains (how components interact at runtime)
-${callChainSection || "(none)"}
+## Integration with Other Components
+Describe how this module connects to other parts of the system:
+- Which other modules depend on this one, and which modules does this one depend on
+- Link to other wiki pages inline using markdown links: "For more details on X, see [Page Title](page-filename.md)"
+- Describe the data flow between this component and its collaborators
+- Note any important interfaces or contracts that define the integration boundaries
 
-## Type Hierarchies (inheritance structure)
-${hierarchySection || "(none)"}
+WRITING RULES:
+- Write 1000-2000 words of technical prose. Be specific, precise, and informative.
+- Include 0-1 Mermaid diagrams ONLY when a visual genuinely clarifies complex relationships or flows. Do not force diagrams where prose suffices.
+- Prefer short inline code snippets (3-10 lines) over diagrams — showing real code is more valuable than abstract diagrams.
+- Tables must contain REAL method/class names and REAL file paths from the reference data provided.
+- Every technical claim must be traceable to a source file. Use paths exactly as shown in the reference data.
+- Do NOT use generic placeholder names like "FileName.cs" — always use the actual path such as \`src/ApplicationCore/Services/OrderService.cs:34\`.
+- Do NOT echo or reproduce raw symbol lists, relationship lists, or source code blocks from the reference data verbatim.
+- Do NOT include XML tags, reference_data markers, or any meta-structure from the input.
+- Cross-reference other wiki pages inline where relevant (e.g., "see [Domain Entities](2.1-entities.md) for the entity definitions").
+- Write for a developer who is new to this codebase and needs to understand both WHAT the code does and WHY it is designed that way.
+- Focus on architectural significance and design rationale, not just describing what code exists.
+- Start your output directly with "## Relevant Source Files" — no title heading, no introduction before it.
 
-## Related Source Files
-${context.relatedFiles.slice(0, 20).join("\n") || "(none)"}
+CODE SNIPPET GUIDELINES:
+- Extract real code from the reference data — never fabricate or paraphrase code.
+- Each snippet should demonstrate a specific pattern, design decision, or integration point.
+- Annotate snippets with brief explanation of what makes them architecturally significant.
+- Use the exact language identifier in fenced code blocks (e.g., \`\`\`csharp, \`\`\`typescript, \`\`\`python).
+- When showing method signatures in tables, include the return type and key parameters.
+- For configuration or setup code, show the key registration or binding lines, not boilerplate.
 
-${crossLinks ? `## Other Wiki Pages (for cross-linking)\n${crossLinks}` : ""}
+TABLE FORMATTING:
+- Use tables for structured data: methods, properties, endpoints, configuration options, event types.
+- Every cell must contain real values from the reference data — never use placeholder text.
+- Include a "Source" or "Location" column with the file path and line range where the item is defined.
+- Sort table rows by importance or logical grouping, not alphabetically.
 
-## WRITING REQUIREMENTS
+MERMAID DIAGRAM GUIDELINES (when used):
+- Use classDiagram for inheritance and composition relationships.
+- Use sequenceDiagram for request/response flows and multi-step processes.
+- Use flowchart TD for data pipelines and processing stages.
+- Keep diagrams focused — maximum 8-10 nodes. Omit trivial relationships.
+- Label edges with the method or event name that triggers the interaction.
+- Every node in the diagram must correspond to a real class, interface, or component from the codebase.`;
 
-You must produce a detailed, well-structured documentation page (1500-2500 words). Follow this structure:
+  const prompt = `Write the wiki page for section "${context.number}. ${context.title}".
 
-### 1. Purpose and Scope (2-3 paragraphs)
-- What this module/component does and why it exists
-- Where it fits in the overall architecture
-- Key design decisions and patterns used
+Topic: ${context.description}
 
-### 2. Architecture / Component Overview
-- Include a Mermaid diagram showing the component relationships:
-  - Use \`classDiagram\` for entity/class relationships
-  - Use \`graph TD\` or \`flowchart TD\` for architectural flows
-  - Use \`sequenceDiagram\` for request/response flows
-- Describe each component's role
+IMPORTANT: Start your output with this exact section:
+## Relevant Source Files
+${relevantFilesSection || "(none)"}
 
-### 3. Detailed Component Documentation
-For each important class/interface/function:
-- What it does and why
-- Key methods/properties with their purpose
-- How it connects to other components
-- Reference source files as \`filename:startLine-endLine\`
+Then write the rest of the page using the reference data below.
 
-### 4. Data Flow / Process Flow
-- How data moves through these components
-- Include a Mermaid \`sequenceDiagram\` or \`flowchart\` if appropriate
-- Describe key interactions step by step
+<reference_data>
+${symbolSummary ? `<symbols>\n${symbolSummary}\n</symbols>` : ""}
+${relationshipSummary ? `<relationships>\n${relationshipSummary}\n</relationships>` : ""}
+${keySourceSnippets ? `<source_snippets>\n${keySourceSnippets}\n</source_snippets>` : ""}
+${callChainSection ? `<call_chains>\n${callChainSection}\n</call_chains>` : ""}
+${hierarchySection ? `<type_hierarchy>\n${hierarchySection}\n</type_hierarchy>` : ""}
+${crossLinks ? `<cross_links>\n${crossLinks}\n</cross_links>` : ""}
+</reference_data>
 
-### 5. Key Implementation Details
-- Important patterns (repository, specification, factory, etc.)
-- Configuration and dependency injection
-- Error handling approaches
-
-### 6. Integration Points
-- How this module connects to other parts of the system
-- External dependencies
-- Cross-reference other wiki pages where relevant
-
-### FORMATTING RULES
-- Use markdown headers (##, ###) to structure content
-- Reference source files inline as \`filename:line\` (e.g., \`OrderService.cs:42\`)
-- Include 2-4 Mermaid diagrams per page (class diagrams, flowcharts, sequence diagrams)
-- Use tables where comparing multiple items (properties, endpoints, configuration options)
-- Use bullet points for lists of properties, methods, or features
-- Write for a developer who is new to this codebase
-- Be specific and technical — avoid vague statements
-- Do NOT start with "Okay" or "Sure" or any preamble — start directly with the content`;
-
-  const systemPrompt = `You are a senior technical writer producing wiki documentation for a code repository. Write clear, thorough, well-structured pages that help developers understand the codebase quickly. Your pages should match the quality of DeepWiki.com documentation — comprehensive, well-diagrammed, and precisely referenced to source code.
-
-Key principles:
-- Every claim should be traceable to source code (cite files and line numbers)
-- Diagrams should illustrate actual relationships from the code, not generic patterns
-- Use Mermaid syntax for all diagrams
-- Be comprehensive but focused — cover what's in scope for this page
-- Cross-reference related wiki pages when mentioning topics covered elsewhere`;
+Write the wiki page now. Use REAL file paths from the reference data above (never use placeholder "FileName.cs"). Include short code snippets showing key patterns. Cross-reference other wiki pages where relevant.`;
 
   return await provider.generate(prompt, {
     systemPrompt,
@@ -112,52 +123,41 @@ Key principles:
   });
 }
 
-function buildSymbolSection(
+/**
+ * Build a condensed summary of symbols — one line per symbol with key info.
+ * Avoids verbose per-property dumps that local models echo verbatim.
+ */
+function buildSymbolSummary(
   context: PageContext,
   store?: GraphStore,
 ): string {
   if (context.focalSymbols.length === 0) return "";
 
-  const groups = new Map<string, SymbolNode[]>();
-  for (const s of context.focalSymbols) {
-    const list = groups.get(s.kind) ?? [];
-    list.push(s);
-    groups.set(s.kind, list);
-  }
-
   const lines: string[] = [];
 
-  for (const [kind, symbols] of groups) {
-    lines.push(`### ${kind.charAt(0).toUpperCase() + kind.slice(1)}s`);
-    for (const s of symbols) {
-      lines.push(`\n**${s.name}** (\`${s.filePath}:${s.startLine}-${s.endLine}\`)`);
-      if (s.signature) lines.push(`  Signature: \`${s.signature}\``);
-      if (s.visibility) lines.push(`  Visibility: ${s.visibility}`);
-      if (s.docstring) lines.push(`  Doc: ${s.docstring.slice(0, 200)}`);
-      if (s.isAbstract) lines.push("  Abstract: yes");
-      if (s.isStatic) lines.push("  Static: yes");
-      if (s.isAsync) lines.push("  Async: yes");
-      if (s.decorators?.length) lines.push(`  Decorators: ${s.decorators.join(", ")}`);
+  for (const s of context.focalSymbols) {
+    // One-line summary per symbol
+    const parts = [`${s.kind} ${s.name}`];
+    if (s.signature) parts.push(`— ${s.signature.slice(0, 100)}`);
+    parts.push(`(${s.filePath}:${s.startLine})`);
+    if (s.isAbstract) parts.push("[abstract]");
+    if (s.isStatic) parts.push("[static]");
+    if (s.docstring) parts.push(`// ${s.docstring.slice(0, 100)}`);
+    lines.push(parts.join(" "));
 
-      // Include members for classes
-      if (
-        store &&
-        (s.kind === "class" || s.kind === "interface" || s.kind === "struct")
-      ) {
-        const children = store
-          .getEdgesFrom(s.id, "contains")
-          .map((e) => store.getNode(e.target))
-          .filter((n): n is SymbolNode => n !== undefined);
+    // For classes/interfaces, list members as compact one-liners
+    if (
+      store &&
+      (s.kind === "class" || s.kind === "interface" || s.kind === "struct")
+    ) {
+      const children = store
+        .getEdgesFrom(s.id, "contains")
+        .map((e) => store.getNode(e.target))
+        .filter((n): n is SymbolNode => n !== undefined);
 
-        if (children.length > 0) {
-          lines.push("  Members:");
-          for (const child of children.slice(0, 15)) {
-            let memberLine = `    - ${child.kind} \`${child.name}\``;
-            if (child.signature) memberLine += ` — ${child.signature.slice(0, 80)}`;
-            if (child.visibility) memberLine += ` [${child.visibility}]`;
-            lines.push(memberLine);
-          }
-        }
+      for (const child of children.slice(0, 10)) {
+        const sig = child.signature ? child.signature.slice(0, 60) : child.name;
+        lines.push(`  └─ ${child.kind} ${sig} [${child.visibility ?? ""}]`);
       }
     }
   }
@@ -165,45 +165,59 @@ function buildSymbolSection(
   return lines.join("\n");
 }
 
-function buildRelationshipSection(
+/**
+ * Build a condensed relationship summary — group by kind,
+ * show only the most important relationships.
+ */
+function buildRelationshipSummary(
   context: PageContext,
   store?: GraphStore,
 ): string {
   if (context.relationships.length === 0) return "";
 
-  const lines: string[] = [];
-  const grouped = new Map<string, { source: string; target: string }[]>();
+  // Filter to only interesting relationship types, skip contains/imports noise
+  const skipKinds = new Set(["contains", "imports"]);
+  const interesting = context.relationships.filter(
+    (e) => !skipKinds.has(e.kind),
+  );
 
-  for (const e of context.relationships.slice(0, 50)) {
+  const grouped = new Map<string, string[]>();
+  for (const e of interesting.slice(0, 30)) {
     const list = grouped.get(e.kind) ?? [];
     const srcNode = store?.getNode(e.source);
     const tgtNode = store?.getNode(e.target);
-    list.push({
-      source: srcNode ? `${srcNode.name} (${srcNode.kind})` : e.source,
-      target: tgtNode ? `${tgtNode.name} (${tgtNode.kind})` : e.target,
-    });
+    const src = srcNode ? srcNode.name : e.source;
+    const tgt = tgtNode ? tgtNode.name : e.target;
+    list.push(`${src} → ${tgt}`);
     grouped.set(e.kind, list);
   }
 
+  const lines: string[] = [];
   for (const [kind, rels] of grouped) {
-    lines.push(`### ${kind} relationships`);
-    for (const r of rels.slice(0, 15)) {
-      lines.push(`- ${r.source} → ${r.target}`);
-    }
+    lines.push(`${kind}: ${rels.slice(0, 8).join(", ")}`);
   }
-
   return lines.join("\n");
 }
 
-function buildSourceSection(context: PageContext): string {
+/**
+ * Build key source snippets — only the most important code blocks,
+ * truncated to keep prompt size manageable.
+ */
+function buildKeySourceSnippets(context: PageContext): string {
   if (context.sourceBlocks.length === 0) return "";
 
-  return context.sourceBlocks
-    .slice(0, 15)
-    .map(
-      (b) =>
-        `### ${b.node.kind}: ${b.node.name} [${b.filePath}:${b.startLine}-${b.endLine}]\n\`\`\`${b.language}\n${b.code}\n\`\`\``,
-    )
+  // Prioritize classes and important methods, skip trivial property-only classes
+  const ranked = context.sourceBlocks
+    .filter((b) => b.code.length > 50) // skip trivial one-liners
+    .slice(0, 8); // max 8 snippets
+
+  return ranked
+    .map((b) => {
+      const code = b.code.length > 1500
+        ? b.code.slice(0, 1500) + "\n// ... truncated"
+        : b.code;
+      return `[${b.node.kind}: ${b.node.name}] ${b.filePath}:${b.startLine}-${b.endLine}\n\`\`\`${b.language}\n${code}\n\`\`\``;
+    })
     .join("\n\n");
 }
 

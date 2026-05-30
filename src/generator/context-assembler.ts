@@ -78,13 +78,18 @@ export function assemblePageContext(
     }
   }
 
-  // Source code blocks — prioritize focal symbols, include members
-  for (const symbol of focalSymbols.slice(0, 15)) {
+  // Source code blocks — prioritize focal symbols (classes/interfaces),
+  // then include a few key method implementations
+  for (const symbol of focalSymbols.slice(0, 10)) {
     const block = readSourceBlock(symbol, projectRoot);
     if (block) sourceBlocks.push(block);
   }
-  for (const member of memberSymbols.slice(0, 20)) {
-    if (member.kind === "method" || member.kind === "function") {
+  // Only include method bodies for substantial methods (not getters/setters)
+  for (const member of memberSymbols.slice(0, 10)) {
+    if (
+      (member.kind === "method" || member.kind === "function") &&
+      member.endLine - member.startLine > 3 // skip trivial methods
+    ) {
       const block = readSourceBlock(member, projectRoot);
       if (block) sourceBlocks.push(block);
     }

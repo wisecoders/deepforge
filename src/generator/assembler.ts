@@ -32,6 +32,11 @@ export function assembleWiki(
     const nav = buildPageNav(page, pages, structure);
     writeFileSync(fullPath, header + page.content + "\n\n---\n\n" + nav);
   }
+
+  // Generate docsify files for browseable wiki
+  writeFileSync(join(outputDir, "_sidebar.md"), buildSidebar(structure, pages));
+  writeFileSync(join(outputDir, "index.html"), buildDocsifyHtml(structure.title));
+  writeFileSync(join(outputDir, ".nojekyll"), "");
 }
 
 function buildIndex(
@@ -133,6 +138,63 @@ function buildPageNav(
   }
 
   return lines.join("");
+}
+
+function buildSidebar(structure: WikiStructure, pages: WikiPage[]): string {
+  let md = `- [Home](index.md)\n`;
+  for (const section of structure.sections) {
+    const page = pages.find((p) => p.number === section.number);
+    const link = page ? `(${page.path})` : "";
+    md += `- [${section.number}. ${section.title}]${link}\n`;
+    for (const sub of section.subsections) {
+      const subPage = pages.find((p) => p.number === sub.number);
+      const subLink = subPage ? `(${subPage.path})` : "";
+      md += `  - [${sub.number}. ${sub.title}]${subLink}\n`;
+    }
+  }
+  return md;
+}
+
+function buildDocsifyHtml(title: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.css">
+  <style>
+    :root {
+      --base-font-size: 15px;
+      --theme-color: #3F51B5;
+      --sidebar-width: 280px;
+    }
+    .markdown-section pre > code {
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    window.$docsify = {
+      name: '${title.replace(/'/g, "\\'")}',
+      loadSidebar: true,
+      subMaxLevel: 3,
+      search: 'auto',
+      auto2top: true,
+      mergeNavbar: true,
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-csharp.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-typescript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify-mermaid@2/dist/docsify-mermaid.js"></script>
+</body>
+</html>`;
 }
 
 export function pagePathFromNumber(number: string, title: string): string {
