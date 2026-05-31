@@ -1,18 +1,24 @@
 # ===========================================================================
-# Stage 1: Build the CLI
+# Stage 1: Build
 # ===========================================================================
 FROM node:20-slim AS builder
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+
+# Full install — better-sqlite3 needs native compilation
+RUN npm ci
 
 COPY tsconfig.json tsup.config.ts ./
 COPY src/ src/
 COPY wasm/ wasm/
 
 RUN npm run build
-RUN npm prune --production --ignore-scripts
+RUN npm prune --production
 
 # ===========================================================================
 # Stage 2: Runtime
@@ -26,29 +32,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Production node_modules (includes openai, @anthropic-ai/sdk)
 COPY --from=builder /app/node_modules/ node_modules/
-
-# Built CLI
 COPY --from=builder /app/dist/ dist/
-
-# Tree-sitter WASM grammars
 COPY --from=builder /app/wasm/ wasm/
-
 COPY package.json ./
-
-# Controller source (runs via tsx at startup)
-COPY src/controller/ src/controller/
-
-# Install tsx for running the controller TS files directly
-RUN npm install --no-save tsx
 
 ENV NODE_ENV=production
 ENV DATA_DIR=/data
 
 VOLUME ["/data"]
-
 EXPOSE 8080 8081
 
-# Default: run the controller API + wiki server
-CMD ["node", "--import", "tsx", "src/controller/server.ts"]
+# Default: run the controller API
+CMD ["node", "dist/controller/server.js"]

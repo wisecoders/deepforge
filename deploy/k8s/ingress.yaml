@@ -1,10 +1,7 @@
-# Ingress configuration for deepforge
-# Requires an ingress controller that supports wildcard subdomains
-# (e.g., nginx-ingress, traefik, or cloud-specific ALB/Application Gateway)
-#
-# Two routing patterns:
-# 1. api.deepforge.example.com   → controller API (submit repos, check status)
-# 2. *.deepforge.example.com     → wiki server (generated documentation)
+# Ingress for local Docker Desktop Kubernetes
+# Routes:
+#   deepforge.local           → controller API (dashboard + API)
+#   *.deepforge.local         → wiki server (generated docs)
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -17,7 +14,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: api.deepforge.example.com
+    - host: deepforge.local
       http:
         paths:
           - path: /
@@ -27,10 +24,6 @@ spec:
                 name: deepforge-controller
                 port:
                   name: api
-  tls:
-    - hosts:
-        - api.deepforge.example.com
-      secretName: deepforge-api-tls
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -39,14 +32,11 @@ metadata:
   namespace: deepforge
   annotations:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      # Cache static wiki content
-      add_header Cache-Control "public, max-age=3600";
 spec:
   ingressClassName: nginx
   rules:
-    # Wildcard subdomain: <slug>.deepforge.example.com
-    - host: "*.deepforge.example.com"
+    # Wildcard subdomain for generated wikis
+    - host: "*.deepforge.local"
       http:
         paths:
           - path: /
@@ -56,7 +46,3 @@ spec:
                 name: deepforge-wiki
                 port:
                   name: http
-  tls:
-    - hosts:
-        - "*.deepforge.example.com"
-      secretName: deepforge-wildcard-tls

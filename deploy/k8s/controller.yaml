@@ -18,7 +18,8 @@ spec:
       containers:
         - name: controller
           image: deepforge:latest
-          command: ["node", "--import", "tsx", "src/controller/server.ts"]
+          imagePullPolicy: Never
+          command: ["node", "dist/controller/server.js"]
           ports:
             - containerPort: 8080
               name: api
@@ -31,7 +32,9 @@ spec:
             - name: DATA_DIR
               value: "/data"
             - name: BASE_DOMAIN
-              value: "deepforge.example.com"  # Change to your domain
+              value: "deepforge.local"
+            - name: CONTROLLER_URL
+              value: "http://deepforge.local"
           volumeMounts:
             - name: data
               mountPath: /data
@@ -57,7 +60,8 @@ spec:
 
         - name: wiki-server
           image: deepforge:latest
-          command: ["node", "--import", "tsx", "src/controller/wiki-server.ts"]
+          imagePullPolicy: Never
+          command: ["node", "dist/controller/wiki-server.js"]
           ports:
             - containerPort: 8081
               name: wiki
@@ -67,7 +71,7 @@ spec:
             - name: WIKIS_DIR
               value: "/data/wikis"
             - name: BASE_DOMAIN
-              value: "deepforge.example.com"
+              value: "deepforge.local"
           volumeMounts:
             - name: data
               mountPath: /data
