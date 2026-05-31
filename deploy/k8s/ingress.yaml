@@ -1,7 +1,7 @@
 # Ingress for local Docker Desktop Kubernetes
 # Routes:
 #   deepforge.local           → controller API (dashboard + API)
-#   *.deepforge.local         → wiki server (generated docs)
+#   <slug>.deepforge.local    → per-wiki pods (created dynamically by controller)
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -24,25 +24,3 @@ spec:
                 name: deepforge-controller
                 port:
                   name: api
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: deepforge-wikis
-  namespace: deepforge
-  annotations:
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
-spec:
-  ingressClassName: nginx
-  rules:
-    # Wildcard subdomain for generated wikis
-    - host: "*.deepforge.local"
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: deepforge-wiki
-                port:
-                  name: http
