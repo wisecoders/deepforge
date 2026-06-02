@@ -2,7 +2,7 @@
 
 Generate comprehensive wiki documentation from any code repository. Deepforge indexes your codebase into a knowledge graph using tree-sitter, then uses LLMs to produce rich documentation with architecture diagrams, code citations, and cross-linked pages.
 
-![Dashboard](docs/screenshot-placeholder.png)
+![Deepforge Dashboard](docs/controller.png)
 
 ## Features
 
