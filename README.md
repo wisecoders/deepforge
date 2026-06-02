@@ -1,116 +1,170 @@
 # Deepforge
 
-Generate comprehensive wiki documentation from any code repository. Deepforge indexes your codebase into a knowledge graph, then uses LLMs to produce DeepWiki-quality documentation with real code references, architecture diagrams, and cross-linked pages.
+Generate comprehensive wiki documentation from any code repository. Deepforge indexes your codebase into a knowledge graph using tree-sitter, then uses LLMs to produce rich documentation with architecture diagrams, code citations, and cross-linked pages.
+
+![Dashboard](docs/screenshot-placeholder.png)
+
+## Features
+
+- **Multi-language support** — TypeScript, JavaScript, Python, C#, Go, Rust, Java, Kotlin, Swift, Ruby, PHP, C, C++
+- **Knowledge graph** — Extracts symbols, relationships, call chains, and type hierarchies into a queryable SQLite graph with full-text search
+- **LLM-powered generation** — Plans wiki structure based on graph analysis, generates pages with real code snippets and Mermaid diagrams
+- **Multi-provider** — Claude (with prompt caching), OpenAI, Azure OpenAI, or Ollama (local)
+- **Kubernetes-native** — Controller API with dashboard, per-wiki pod deployment, RBAC, progress streaming
+- **Resync workflow** — Each wiki has a "Resync" button that triggers re-generation while preserving the URL
 
 ## Architecture
 
 ```
-                                ┌─────────────────────────────────────────────┐
-                                │            Kubernetes Cluster               │
-                                │                                             │
-  User ──POST /api/generate──►  │  ┌──────────────────────┐                   │
-  (repo URL + auth)             │  │  Controller Pod       │                  │
-                                │  │                       │                  │
-                                │  │  ┌─────────────────┐  │   ┌───────────┐  │
-                                │  │  │  Controller API  │──┼──►│           │  │
-                                │  │  │  :8080           │  │   │   PVC     │  │
-                                │  │  └────────┬────────┘  │   │  /data    │  │
-                                │  │           │           │   │           │  │
-                                │  │  ┌────────▼────────┐  │   │  /repos   │  │
-                                │  │  │  Wiki Server    │──┼──►│  /wikis   │  │
-                                │  │  │  :8081          │  │   │  /jobs    │  │
-                                │  │  └─────────────────┘  │   └───────────┘  │
-                                │  └──────────────────────┘                   │
-                                │                                             │
-  <slug>.deepforge.example.com  │  ┌──────────────────────┐                   │
-  ──────────────────────────►   │  │  Ingress Controller   │                  │
-                                │  │  (nginx/traefik)      │                  │
-                                │  │  Wildcard *.domain    │                  │
-                                │  └──────────────────────┘                   │
-                                └─────────────────────────────────────────────┘
+                        ┌─────────────────────────────────────────────────────────┐
+                        │                 Kubernetes Cluster                       │
+                        │                                                         │
+  User ─── HTTP ──────► │  ┌────────────────────────────┐                         │
+                        │  │  NGINX Ingress              │                         │
+                        │  │  deepforge.local → ctrl     │                         │
+                        │  │  <slug>.deepforge.local → wiki pods                  │
+                        │  └────────┬───────────┬───────┘                         │
+                        │           │           │                                  │
+                        │  ┌────────▼────────┐  │  ┌──────────────────────────┐   │
+                        │  │  Controller Pod  │  │  │  Wiki Pods (per-repo)   │   │
+                        │  │  ─────────────── │  │  │  ────────────────────── │   │
+                        │  │  Dashboard :8080 │  │  │  wiki-org-repo          │   │
+                        │  │  API endpoints   │  │  │  wiki-another-repo      │   │
+                        │  │  Job pipeline    │──┼─►│  wiki-...               │   │
+                        │  │  kubectl apply   │  │  │  (Docsify static)       │   │
+                        │  └────────┬─────────┘  │  └─────────────┬──────────┘   │
+                        │           │            │                 │              │
+                        │           ▼            │                 ▼              │
+                        │  ┌─────────────────────┴─────────────────────────────┐  │
+                        │  │  PersistentVolumeClaim (deepforge-data)            │  │
+                        │  │  /data/repos/  /data/wikis/  /data/logs/           │  │
+                        │  └───────────────────────────────────────────────────┘  │
+                        └─────────────────────────────────────────────────────────┘
+                                          │
+                         ┌────────────────┼────────────────┐
+                         ▼                ▼                ▼
+                   ┌──────────┐   ┌─────────────┐   ┌──────────┐
+                   │  GitHub  │   │ Azure DevOps│   │  Ollama  │
+                   │  GitLab  │   │ Bitbucket   │   │  Claude  │
+                   │  (repos) │   │  (repos)    │   │  OpenAI  │
+                   └──────────┘   └─────────────┘   └──────────┘
 ```
+
+> Full draw.io diagrams available in [`docs/architecture.drawio`](docs/architecture.drawio) and [`docs/pipeline-flow.drawio`](docs/pipeline-flow.drawio)
 
 ### Processing Pipeline
 
-When a repository URL is submitted, Deepforge runs a multi-stage pipeline:
-
 ```
-  Clone repo ──► Scan files ──► Extract symbols ──► Resolve refs ──► Store graph ──► Plan wiki ──► Generate pages ──► Assemble wiki
-                                (tree-sitter)       (cross-file)     (SQLite)        (LLM)         (LLM × N)         (docsify)
+  Clone ──► Scan ──► Extract ──► Resolve ──► Store ──► Plan ──► Generate ──► Assemble ──► Deploy Pod
+                     (tree-sitter) (cross-file)  (SQLite)   (LLM)    (LLM x N)   (docsify)    (kubectl)
 ```
 
-1. **Scanner** — discovers source files, detects languages, applies ignore rules
-2. **Extractor** — parses each file with tree-sitter WASM grammars, extracts symbols (classes, methods, interfaces) and intra-file relationships
-3. **Resolver** — resolves cross-file references (imports, inheritance, calls) into graph edges
-4. **Store** — persists the knowledge graph in SQLite with FTS5 full-text search
-5. **Planner** — LLM analyzes the graph and plans a concept-based wiki structure (sections + subsections)
-6. **Page Writer** — LLM generates each wiki page with real code snippets, file:line citations, Mermaid diagrams, and cross-references
-7. **Assembler** — writes markdown files + docsify site with sidebar navigation and search
+| Stage | What it does | Output |
+|-------|-------------|--------|
+| **Scanner** | Discovers source files, detects languages, applies .gitignore rules | `SourceFile[]` |
+| **Extractor** | Parses each file with tree-sitter WASM, extracts symbols + intra-file edges | `GraphNode[]`, `GraphEdge[]` |
+| **Resolver** | Resolves cross-file references (imports, inheritance, type usage) | Enriched edges |
+| **Store** | Persists knowledge graph in SQLite with FTS5 full-text search | Queryable graph DB |
+| **Planner** | LLM analyzes the graph and plans a concept-based wiki structure | Section tree |
+| **Page Writer** | LLM generates each page with code snippets, citations, Mermaid diagrams | Markdown pages |
+| **Assembler** | Writes markdown + Docsify site with sidebar, search, resync button | Wiki directory |
+| **Deployer** | Creates K8s Deployment + Service + Ingress for the wiki pod | Live URL |
 
-### Component Structure
+### Project Structure
 
 ```
 src/
-  scanner/          Source file discovery and language detection
-  extraction/       Tree-sitter parsing, per-language symbol extraction
-  resolution/       Cross-file reference resolution
-  store/            SQLite graph storage with FTS5
-  graph/            Graph traversal and query algorithms
-  generator/        LLM-based wiki generation pipeline
-    planner.ts        Wiki structure planning
+  types.ts            All type definitions (single source of truth)
+  errors.ts           Error class hierarchy
+  scanner/            Source file discovery and language detection
+  extraction/         Tree-sitter parsing, per-language symbol extraction
+  resolution/         Cross-file reference resolution
+  store/              SQLite graph storage with FTS5
+  graph/              Graph traversal and query algorithms
+  generator/          LLM-based wiki generation pipeline
+    planner.ts          Wiki structure planning
     context-assembler.ts  Page context assembly from graph
-    page-writer.ts    LLM prompt engineering for page generation
-    assembler.ts      Markdown + docsify output assembly
-  llm/              LLM provider abstraction
-  cli/              Command-line interface
-  controller/       Kubernetes controller API + wiki server
+    page-writer.ts      LLM page generation with Mermaid diagrams
+    assembler.ts        Markdown + Docsify output assembly
+  llm/                LLM provider abstraction (Claude, OpenAI, Azure, Ollama)
+  cli/                Command-line interface
+  controller/         Kubernetes controller API + wiki server
+    server.ts           Controller API, dashboard, job management, K8s pod deployment
+    wiki-server.ts      Static wiki file server (runs in per-wiki pods)
+deploy/
+  k8s/                Kubernetes manifests (kustomize)
+docs/
+  architecture.drawio   System architecture diagram (draw.io)
+  pipeline-flow.drawio  Data pipeline flow diagram (draw.io)
+wasm/                 Tree-sitter WASM grammar files
 ```
 
-## Quick Start (Local)
+## Quick Start
+
+### Local CLI Usage
 
 ```bash
-# Install
+# Install dependencies
 npm install
 
-# Set your LLM provider in .env (see .env.example)
+# Copy and configure environment
 cp .env.example .env
 # Edit .env — set LLM_PROVIDER and the corresponding API key
+
+# Build
+npm run build
 
 # Generate wiki for a local repo
 npx deepforge generate /path/to/your/repo --output ./wiki
 
-# Serve the wiki
+# Serve the wiki locally
 cd wiki && python3 -m http.server 3000
 # Open http://localhost:3000
 ```
 
+### Docker (standalone)
+
+```bash
+docker build -t deepforge:latest .
+
+docker run -d \
+  --name deepforge \
+  -p 8080:8080 \
+  -v deepforge-data:/data \
+  -e LLM_PROVIDER=ollama \
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
+  deepforge:latest
+
+# Open http://localhost:8080
+```
+
 ## LLM Provider Configuration
 
-Deepforge supports four LLM providers. Set `LLM_PROVIDER` in your `.env` file:
+Set `LLM_PROVIDER` in `.env` or pass as environment variable:
 
 | Provider | `LLM_PROVIDER` | Required env vars | Notes |
 |----------|----------------|-------------------|-------|
-| **Claude** | `claude` | `ANTHROPIC_API_KEY` | Best quality. Uses prompt caching to reduce costs. |
+| **Claude** | `claude` | `ANTHROPIC_API_KEY` | Best quality. Uses prompt caching for cost reduction. |
 | **OpenAI** | `openai` | `OPENAI_API_KEY` | GPT-4o default. Set `OPENAI_BASE_URL` for compatible APIs. |
-| **Azure OpenAI** | `azure` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT` | Enterprise deployments. Supports `retry-after` headers. |
-| **Ollama** | `ollama` | (none) | Local models. Set `OLLAMA_BASE_URL` (default: `localhost:11434`). |
+| **Azure OpenAI** | `azure` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT` | Enterprise. Supports `retry-after` headers. |
+| **Ollama** | `ollama` | — | Free, local models. Set `OLLAMA_BASE_URL` (default: `localhost:11434`). |
 
-CLI flags (`--provider`, `--model`, `--api-key`) override `.env` values.
+See [`.env.example`](.env.example) for all configuration options.
 
-## CLI Usage
+## CLI Reference
 
 ```bash
-# Full pipeline: index + generate
+# Full pipeline: index + generate wiki
 npx deepforge generate <projectPath> [options]
 
-# Index only (no wiki generation)
+# Index only (build knowledge graph, no wiki)
 npx deepforge index <projectPath>
 
 # View knowledge graph stats
 npx deepforge status <projectPath>
 
 # Search the knowledge graph
-npx deepforge query <projectPath> "BasketService"
+npx deepforge query <projectPath> "ClassName"
 ```
 
 ### Generate Options
@@ -119,53 +173,91 @@ npx deepforge query <projectPath> "BasketService"
 |------|-------------|---------|
 | `-o, --output <path>` | Wiki output directory | `./wiki` |
 | `--skip-index` | Skip indexing, use existing graph | — |
-| `--provider <name>` | LLM provider | from `.env` |
-| `--model <name>` | Model name | provider default |
-| `--api-key <key>` | API key | from `.env` |
+| `--provider <name>` | LLM provider override | from `.env` |
+| `--model <name>` | Model name override | provider default |
+| `--api-key <key>` | API key override | from `.env` |
 | `--concurrency <n>` | Parallel page generation | `3` |
 
 ## Kubernetes Deployment
 
-Deepforge ships as a single container image with two processes:
+Deepforge runs as a controller that manages per-wiki pods:
 
-- **Controller API** (`:8080`) — accepts repo URLs, manages jobs, triggers wiki generation
-- **Wiki Server** (`:8081`) — serves generated wikis via subdomain or path routing
+- **Controller Pod** — Accepts repo URLs, runs the generation pipeline, deploys wiki pods via `kubectl apply`
+- **Wiki Pods** — One per generated wiki, serves the Docsify site. Named `wiki-<slug>` with its own Service and Ingress
 
 ### Prerequisites
 
-- Kubernetes cluster with an ingress controller (nginx-ingress or traefik)
-- Wildcard DNS record: `*.deepforge.example.com → ingress IP`
-- Wildcard TLS certificate (or cert-manager with DNS challenge)
-- A persistent volume for `/data`
+- Kubernetes cluster with an NGINX Ingress Controller
+- Wildcard DNS: `*.deepforge.yourdomain.com → ingress IP`
+- PersistentVolume (20Gi+ recommended)
 
 ### Deploy
 
 ```bash
-# 1. Configure secrets
-#    Edit deploy/k8s/secrets.yaml with your LLM API key and git credentials
+# 1. Configure secrets (LLM provider + optional git credentials)
+vim deploy/k8s/secrets.yaml
 
-# 2. Update domain
-#    Search-replace "deepforge.example.com" in deploy/k8s/ with your domain
+# 2. Update domain (replace deepforge.local with your domain)
+sed -i 's/deepforge.local/deepforge.yourdomain.com/g' deploy/k8s/*.yaml
 
 # 3. Build and push the image
 docker build -t myregistry/deepforge:latest .
 docker push myregistry/deepforge:latest
 
-# 4. Update image reference in controller.yaml
+# 4. Update image references in controller.yaml
 #    Change "deepforge:latest" to "myregistry/deepforge:latest"
+#    Update WIKI_IMAGE env var to match
 
-# 5. Apply
+# 5. Apply all manifests
 kubectl apply -k deploy/k8s/
+```
+
+### Local Development (Docker Desktop K8s)
+
+```bash
+# Build the image
+docker build -t deepforge:latest .
+
+# Import into containerd (Docker Desktop K8s uses containerd, not Docker daemon)
+docker save deepforge:latest | docker exec -i desktop-control-plane \
+  ctr -n k8s.io images import --all-platforms -
+
+# Deploy
+kubectl apply -k deploy/k8s/
+
+# Port-forward the controller
+kubectl -n deepforge port-forward deploy/deepforge-controller 9091:8080
+
+# Open http://localhost:9091
+```
+
+### What Gets Deployed
+
+```
+Namespace: deepforge
+├── ServiceAccount/deepforge-controller
+├── Role/deepforge-controller (manages deployments, services, ingresses)
+├── RoleBinding/deepforge-controller
+├── Deployment/deepforge-controller (1 replica)
+├── Service/deepforge-controller (:80 → :8080)
+├── Ingress/deepforge-api (deepforge.local → controller)
+├── PVC/deepforge-data (20Gi, shared across all pods)
+│
+│  (Created dynamically per wiki:)
+├── Deployment/wiki-<slug>
+├── Service/wiki-<slug> (:80 → :8081)
+└── Ingress/wiki-<slug> (<slug>.deepforge.local)
 ```
 
 ### Controller API
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/` | GET | Dashboard UI — submit repos, view status, resync |
+| `/` | GET | Dashboard — submit repos, view jobs, stream logs |
 | `/api/generate` | POST | Submit a wiki generation job |
 | `/api/jobs` | GET | List all jobs |
 | `/api/jobs/:id` | GET | Get job status by ID or slug |
+| `/api/jobs/:slug/logs` | GET | Stream job logs (plain text) |
 | `/healthz` | GET | Health check |
 
 #### POST /api/generate
@@ -180,7 +272,7 @@ kubectl apply -k deploy/k8s/
 }
 ```
 
-Authentication options:
+**Authentication options:**
 
 | `auth.method` | Fields | Use case |
 |---------------|--------|----------|
@@ -188,46 +280,49 @@ Authentication options:
 | `pat` | `pat` | GitHub PAT, Azure DevOps PAT |
 | `service_principal` | `tenantId`, `clientId`, `clientSecret` | Azure DevOps with AAD service principal |
 
-Response:
+**Job status lifecycle:**
+
+```
+queued → cloning → indexing → generating → deploying → ready
+                                                     → failed
+```
+
+Each status transition includes a `progress` field with human-readable detail, and all output is streamed to the logs endpoint.
+
+#### Response (ready)
 
 ```json
 {
   "id": "a1b2c3d4e5f6g7h8",
-  "repoUrl": "https://github.com/org/repo",
   "slug": "org-repo",
-  "status": "cloning",
-  "authMethod": "pat",
-  "createdAt": "2025-01-15T10:30:00Z"
-}
-```
-
-When `status` becomes `ready`:
-
-```json
-{
   "status": "ready",
-  "wikiUrl": "https://org-repo.deepforge.example.com",
-  "pages": 43,
-  "lastSyncedAt": "2025-01-15T10:45:00Z"
+  "wikiUrl": "http://org-repo.deepforge.local",
+  "pages": 13,
+  "progress": "Ready — 13 pages",
+  "lastSyncedAt": "2026-05-31T16:05:22Z"
 }
 ```
-
-### Wiki Resync
-
-Each generated wiki includes a **Resync** button (top right) that links back to the controller dashboard with the repo URL pre-filled. Clicking it triggers a fresh clone + regeneration cycle while preserving the same wiki URL.
-
-The controller dashboard at `/` shows all generated wikis with their status, page count, last sync time, and wiki URL.
 
 ### Subdomain Routing
 
-Generated wikis are served at stable subdomain URLs derived from the repository:
+Each wiki gets a stable URL derived from the repository:
 
-| Repository URL | Wiki URL |
-|---------------|----------|
-| `github.com/NimblePros/eShopOnWeb` | `nimblepros-eshoponweb.deepforge.example.com` |
-| `dev.azure.com/myorg/myproject/_git/api` | `myorg-myproject-api.deepforge.example.com` |
+| Repository | Wiki URL |
+|------------|----------|
+| `github.com/NimblePros/eShopOnWeb` | `nimblepros-eshoponweb.deepforge.local` |
+| `github.com/jasontaylordev/CleanArchitecture` | `jasontaylordev-cleanarchitecture.deepforge.local` |
+| `dev.azure.com/org/project/_git/api` | `org-project-api.deepforge.local` |
 
-If wildcard subdomains aren't available, path-based routing works too: `/wiki/<slug>/`
+Path-based fallback: `/wiki/<slug>/` (when wildcard DNS isn't available).
+
+### Wiki Features
+
+Each generated wiki includes:
+- **Docsify SPA** with search plugin and sidebar navigation
+- **Mermaid diagrams** — class diagrams, sequence diagrams, flowcharts
+- **Code citations** — links to source files with line numbers
+- **Cross-references** between pages
+- **Resync banner** — shows last sync time + button to re-generate
 
 ## Development
 
@@ -238,21 +333,28 @@ npm run typecheck   # Type-check with tsc --noEmit
 npm run lint        # Lint with eslint
 ```
 
-### Testing individual components
+### Adding a new language
 
-```bash
-# Test the planner alone
-npx tsx scripts/test-planner.ts
-
-# Test a single page generation
-npx tsx scripts/test-page.ts /path/to/repo "Section Title" claude
-```
+1. Add the tree-sitter WASM grammar to `wasm/`
+2. Implement `LanguageExtractor` in `src/extraction/languages/`
+3. Register it in `src/extraction/languages/index.ts`
+4. Add test fixtures in `__tests__/fixtures/`
 
 ## Supported Languages
 
-TypeScript, JavaScript, Python, C#, Go, Rust, Java, Kotlin, Swift, Ruby, PHP, C, C++
-
-Language support is provided by tree-sitter WASM grammars. Adding a new language requires implementing the `LanguageExtractor` interface in `src/extraction/languages/`.
+| Language | Extracts |
+|----------|----------|
+| TypeScript / JavaScript | Classes, interfaces, functions, methods, imports, exports, type aliases |
+| Python | Classes, functions, imports, decorators |
+| C# | Classes, interfaces, records, methods, properties, namespaces, using directives |
+| Go | Structs, interfaces, functions, methods, packages |
+| Rust | Structs, traits, impls, functions, modules |
+| Java | Classes, interfaces, methods, packages |
+| Kotlin | Classes, interfaces, functions, data classes |
+| Swift | Classes, structs, protocols, extensions |
+| Ruby | Classes, modules, methods |
+| PHP | Classes, interfaces, traits, functions, namespaces |
+| C / C++ | Structs, classes, functions, headers |
 
 ## License
 

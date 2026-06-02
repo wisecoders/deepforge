@@ -20,6 +20,21 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muthukumaran/deepforge.git"
+  },
+  "keywords": [
+    "documentation",
+    "wiki",
+    "code-analysis",
+    "knowledge-graph",
+    "tree-sitter",
+    "llm",
+    "kubernetes",
+    "docsify",
+    "mermaid"
+  ],
   "license": "MIT",
   "dependencies": {
     "better-sqlite3": "^11.0.0",
