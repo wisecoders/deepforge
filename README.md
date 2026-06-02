@@ -195,6 +195,7 @@ Deepforge runs as a controller that manages per-wiki pods:
 
 ```bash
 # 1. Configure secrets (LLM provider + optional git credentials)
+cp deploy/k8s/secrets.yaml.example deploy/k8s/secrets.yaml
 vim deploy/k8s/secrets.yaml
 
 # 2. Update domain (replace deepforge.local with your domain)
