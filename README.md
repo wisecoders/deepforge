@@ -4,7 +4,7 @@ Generate comprehensive wiki documentation from any code repository. Deepforge in
 
 ![Deepforge Dashboard](docs/controller.png)
 
-**[Live Example: eShopOnWeb Wiki](https://muthukumaran.github.io/deepforge/)** — generated from [NimblePros/eShopOnWeb](https://github.com/NimblePros/eShopOnWeb) (36 pages, 8 sections)
+**[Live Example: eShopOnWeb Wiki](https://wisecoders.github.io/deepforge/)** — generated from [NimblePros/eShopOnWeb](https://github.com/NimblePros/eShopOnWeb) (36 pages, 8 sections)
 
 ## Features
 
