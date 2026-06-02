@@ -4,6 +4,8 @@ Generate comprehensive wiki documentation from any code repository. Deepforge in
 
 ![Deepforge Dashboard](docs/controller.png)
 
+**[Live Example: eShopOnWeb Wiki](https://muthukumaran.github.io/deepforge/)** — generated from [NimblePros/eShopOnWeb](https://github.com/NimblePros/eShopOnWeb) (36 pages, 8 sections)
+
 ## Features
 
 - **Multi-language support** — TypeScript, JavaScript, Python, C#, Go, Rust, Java, Kotlin, Swift, Ruby, PHP, C, C++
