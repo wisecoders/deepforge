@@ -452,39 +452,48 @@ function isValidRepoUrl(url: string): boolean {
 
 function renderDashboard(prefillRepo?: string): string {
   const jobs = loadJobs();
+  const readyJobs = jobs.filter((j) => j.status === "ready");
+  const activeJobs = jobs.filter((j) => !["ready", "failed"].includes(j.status));
+  const failedJobs = jobs.filter((j) => j.status === "failed");
+  const totalPages = jobs.reduce((sum, j) => sum + (j.pages ?? 0), 0);
 
-  const jobRows = jobs
+  const jobCards = jobs
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((j) => {
-      const statusColor =
-        j.status === "ready" ? "#4CAF50"
-        : j.status === "failed" ? "#F44336"
-        : "#FF9800";
-      const statusBadge = `<span style="color:${statusColor};font-weight:600">${j.status}</span>`;
+      const isReady = j.status === "ready";
+      const isFailed = j.status === "failed";
+      const isActive = !isReady && !isFailed;
 
-      const wikiLink = j.wikiUrl
-        ? `<a href="${j.wikiUrl}" target="_blank">${j.wikiUrl}</a>`
-        : "—";
+      const statusClass = isReady ? "status-ready" : isFailed ? "status-failed" : "status-active";
+      const statusIcon = isReady ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
+        : isFailed ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="spin"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4m-3.93 7.07l-2.83-2.83M6.34 6.34L3.51 3.51"/></svg>`;
+
+      const repoName = j.slug.split("-").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 
       const lastSync = j.lastSyncedAt
-        ? new Date(j.lastSyncedAt).toLocaleString()
-        : "—";
+        ? new Date(j.lastSyncedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
+        : "";
 
       const progress = j.progress ?? "";
 
-      return `<tr>
-        <td><code>${j.slug}</code></td>
-        <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${j.repoUrl}">${j.repoUrl}</td>
-        <td>${statusBadge}</td>
-        <td style="font-size:11px;color:#666;max-width:250px;overflow:hidden;text-overflow:ellipsis" title="${progress}">${progress}</td>
-        <td>${j.pages ?? "—"}</td>
-        <td>${lastSync}</td>
-        <td>${wikiLink}</td>
-        <td>
-          <a href="/api/jobs/${j.slug}/logs" target="_blank" style="font-size:11px;margin-right:8px">logs</a>
-          ${j.status === "ready" || j.status === "failed" ? `<a href="/?repo=${encodeURIComponent(j.repoUrl)}" class="btn btn-sm">Resync</a>` : ""}
-        </td>
-      </tr>`;
+      return `<div class="wiki-card ${statusClass}">
+        <div class="wiki-card-header">
+          <div class="wiki-card-status">${statusIcon}<span>${j.status}</span></div>
+          <div class="wiki-card-actions">
+            <a href="/api/jobs/${j.slug}/logs" target="_blank" class="action-btn" title="View logs"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></a>
+            ${isReady || isFailed ? `<a href="/?repo=${encodeURIComponent(j.repoUrl)}" class="action-btn" title="Resync"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></a>` : ""}
+          </div>
+        </div>
+        <h3 class="wiki-card-title">${repoName}</h3>
+        <p class="wiki-card-repo" title="${j.repoUrl}">${j.repoUrl.replace(/^https?:\/\//, "")}</p>
+        ${isActive ? `<div class="wiki-card-progress"><div class="progress-text">${progress}</div><div class="progress-bar"><div class="progress-bar-fill"></div></div></div>` : ""}
+        <div class="wiki-card-footer">
+          ${j.pages ? `<span class="wiki-card-meta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>${j.pages} pages</span>` : ""}
+          ${lastSync ? `<span class="wiki-card-meta"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${lastSync}</span>` : ""}
+          ${isReady && j.wikiUrl ? `<a href="${j.wikiUrl}" target="_blank" class="wiki-link">Open Wiki <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ""}
+        </div>
+      </div>`;
     })
     .join("\n");
 
@@ -492,101 +501,250 @@ function renderDashboard(prefillRepo?: string): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Deepforge — Wiki Generator</title>
+  <title>Deepforge</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg-primary: #0f0f23;
+      --bg-secondary: #1a1a3e;
+      --bg-card: #1e1e42;
+      --bg-card-hover: #252552;
+      --bg-input: #151533;
+      --border: #2d2d5e;
+      --border-focus: #6366f1;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #ef4444;
+      --error-bg: rgba(239, 68, 68, 0.1);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-    .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
-    h1 { font-size: 28px; margin-bottom: 4px; }
-    .subtitle { color: #666; margin-bottom: 32px; }
-    .card { background: white; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 24px; }
-    .card h2 { font-size: 18px; margin-bottom: 16px; }
-    .form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-    .form-row label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
-    .form-row input, .form-row select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-    .form-row input[type="url"] { flex: 1; min-width: 300px; }
-    .form-row .field { display: flex; flex-direction: column; }
-    .btn { padding: 8px 20px; background: #3F51B5; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-block; }
-    .btn:hover { background: #303F9F; }
-    .btn-sm { padding: 4px 10px; font-size: 12px; }
-    .auth-fields { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee; }
-    .auth-fields.visible { display: flex; flex-wrap: wrap; gap: 12px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #eee; }
-    th { font-weight: 600; color: #666; font-size: 11px; text-transform: uppercase; }
-    .status-msg { margin-top: 12px; padding: 12px; border-radius: 4px; display: none; }
-    .status-msg.visible { display: block; }
-    .status-msg.success { background: #E8F5E9; color: #2E7D32; }
-    .status-msg.error { background: #FFEBEE; color: #C62828; }
-    .status-msg.info { background: #E3F2FD; color: #1565C0; }
-    code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
-    #logPanel { margin-top: 12px; display: none; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+
+    /* Header */
+    .header { background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a1040 100%); border-bottom: 1px solid var(--border); padding: 20px 0; }
+    .header-inner { max-width: 1400px; margin: 0 auto; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .logo-icon svg { width: 20px; height: 20px; color: white; }
+    .logo-text { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(135deg, #e2e8f0, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header-meta { display: flex; align-items: center; gap: 20px; }
+    .header-badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge-active { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-ready { background: var(--success-bg); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+
+    /* Main */
+    .main { max-width: 1400px; margin: 0 auto; padding: 32px; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; transition: transform 0.15s, border-color 0.15s; }
+    .stat-card:hover { transform: translateY(-2px); border-color: var(--border-focus); }
+    .stat-label { font-size: 12px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.success { color: var(--success); }
+    .stat-value.warning { color: var(--warning); }
+
+    /* Generate Section */
+    .generate-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; margin-bottom: 32px; position: relative; overflow: hidden; }
+    .generate-section::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #6366f1, #8b5cf6, #6366f1); }
+    .section-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+    .section-title svg { color: var(--accent); }
+
+    .form-grid { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: end; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 12px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; }
+    .form-group input, .form-group select { background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 14px; font-size: 14px; color: var(--text-primary); transition: border-color 0.2s, box-shadow 0.2s; font-family: inherit; }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .form-group input::placeholder { color: var(--text-muted); }
+    .form-group select { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+
+    .auth-fields { display: none; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border); }
+    .auth-fields.visible { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+
+    .btn-generate { background: linear-gradient(135deg, #6366f1, #7c3aed); color: white; border: none; border-radius: var(--radius-sm); padding: 11px 28px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+    .btn-generate:hover { background: linear-gradient(135deg, #818cf8, #8b5cf6); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4); }
+    .btn-generate:active { transform: translateY(0); }
+    .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Status message */
+    .status-msg { margin-top: 16px; padding: 14px 16px; border-radius: var(--radius-sm); display: none; font-size: 13px; font-weight: 500; align-items: center; gap: 10px; }
+    .status-msg.visible { display: flex; }
+    .status-msg.success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); }
+    .status-msg.error { background: var(--error-bg); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); }
+    .status-msg.info { background: var(--accent-glow); color: var(--accent-hover); border: 1px solid rgba(99, 102, 241, 0.2); }
+    .status-msg a { color: inherit; text-decoration: underline; }
+
+    /* Log panel */
+    #logPanel { margin-top: 16px; display: none; }
     #logPanel.visible { display: block; }
-    #logPanel pre { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 4px; max-height: 400px; overflow: auto; font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
+    #logPanel pre { background: #0d0d1a; color: #a5f3a6; padding: 18px; border-radius: var(--radius-sm); max-height: 350px; overflow: auto; font-size: 12px; line-height: 1.7; white-space: pre-wrap; font-family: 'JetBrains Mono', 'Fira Code', monospace; border: 1px solid var(--border); }
+    #logPanel pre::-webkit-scrollbar { width: 6px; }
+    #logPanel pre::-webkit-scrollbar-track { background: transparent; }
+    #logPanel pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* Wikis Grid */
+    .wikis-section { margin-bottom: 32px; }
+    .wikis-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+
+    .wiki-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; transition: all 0.2s; position: relative; overflow: hidden; }
+    .wiki-card:hover { border-color: var(--border-focus); transform: translateY(-2px); box-shadow: var(--shadow); }
+    .wiki-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .wiki-card.status-ready::before { background: var(--success); }
+    .wiki-card.status-failed::before { background: var(--error); }
+    .wiki-card.status-active::before { background: linear-gradient(90deg, var(--accent), var(--warning), var(--accent)); background-size: 200% 100%; animation: shimmer 2s infinite; }
+
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .spin { animation: spin 1.5s linear infinite; }
+
+    .wiki-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .wiki-card-status { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .status-ready .wiki-card-status { color: var(--success); }
+    .status-failed .wiki-card-status { color: var(--error); }
+    .status-active .wiki-card-status { color: var(--warning); }
+    .wiki-card-actions { display: flex; gap: 4px; }
+    .action-btn { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--text-muted); transition: all 0.15s; text-decoration: none; }
+    .action-btn:hover { background: rgba(99, 102, 241, 0.1); color: var(--accent); }
+
+    .wiki-card-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; color: var(--text-primary); }
+    .wiki-card-repo { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+    .wiki-card-progress { margin-bottom: 12px; }
+    .progress-text { font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; }
+    .progress-bar { height: 3px; background: var(--bg-input); border-radius: 2px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--warning)); border-radius: 2px; animation: shimmer 2s infinite; background-size: 200% 100%; width: 60%; }
+
+    .wiki-card-footer { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .wiki-card-meta { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+    .wiki-link { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none; display: flex; align-items: center; gap: 4px; transition: color 0.15s; }
+    .wiki-link:hover { color: var(--accent-hover); }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state svg { width: 48px; height: 48px; margin-bottom: 16px; opacity: 0.4; }
+    .empty-state p { font-size: 14px; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .form-grid { grid-template-columns: 1fr; }
+      .wikis-grid { grid-template-columns: 1fr; }
+      .header-inner { flex-direction: column; gap: 12px; align-items: flex-start; }
+    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Deepforge</h1>
-    <p class="subtitle">Generate wiki documentation from any code repository</p>
+  <div class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+        <span class="logo-text">Deepforge</span>
+      </div>
+      <div class="header-meta">
+        ${activeJobs.length > 0 ? `<span class="header-badge badge-active">${activeJobs.length} generating</span>` : ""}
+        ${readyJobs.length > 0 ? `<span class="header-badge badge-ready">${readyJobs.length} wikis live</span>` : ""}
+      </div>
+    </div>
+  </div>
 
-    <div class="card">
-      <h2>Generate Wiki</h2>
+  <div class="main">
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Total Wikis</div>
+        <div class="stat-value">${jobs.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Live</div>
+        <div class="stat-value success">${readyJobs.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">In Progress</div>
+        <div class="stat-value warning">${activeJobs.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Pages</div>
+        <div class="stat-value accent">${totalPages}</div>
+      </div>
+    </div>
+
+    <!-- Generate -->
+    <div class="generate-section">
+      <div class="section-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2m-7.07-3.93l1.41-1.41m10.32-10.32l1.41-1.41M1 12h2m18 0h2m-3.93 7.07l-1.41-1.41M6.34 6.34L4.93 4.93"/></svg>
+        Generate Wiki
+      </div>
       <form id="genForm">
-        <div class="form-row">
-          <div class="field" style="flex:1">
+        <div class="form-grid">
+          <div class="form-group">
             <label for="repoUrl">Repository URL</label>
             <input type="url" id="repoUrl" name="repoUrl" placeholder="https://github.com/org/repo" value="${prefillRepo ?? ""}" required>
           </div>
-          <div class="field">
-            <label for="authMethod">Authentication</label>
-            <select id="authMethod" name="authMethod">
-              <option value="none">Public (no auth)</option>
-              <option value="pat">Personal Access Token</option>
-              <option value="service_principal">Service Principal</option>
-            </select>
+          <div style="display:flex;gap:12px;align-items:end;">
+            <div class="form-group">
+              <label for="authMethod">Auth</label>
+              <select id="authMethod" name="authMethod">
+                <option value="none">Public</option>
+                <option value="pat">PAT</option>
+                <option value="service_principal">Service Principal</option>
+              </select>
+            </div>
+            <button type="submit" class="btn-generate" id="submitBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Generate
+            </button>
           </div>
         </div>
 
         <div id="patFields" class="auth-fields">
-          <div class="field" style="flex:1">
+          <div class="form-group">
             <label for="pat">Personal Access Token</label>
-            <input type="password" id="pat" name="pat" placeholder="ghp_... or Azure DevOps PAT" style="width:100%">
+            <input type="password" id="pat" name="pat" placeholder="ghp_... or Azure DevOps PAT">
           </div>
         </div>
 
         <div id="spFields" class="auth-fields">
-          <div class="field">
+          <div class="form-group">
             <label for="tenantId">Tenant ID</label>
             <input type="text" id="tenantId" name="tenantId" placeholder="xxxxxxxx-xxxx-...">
           </div>
-          <div class="field">
+          <div class="form-group">
             <label for="clientId">Client ID</label>
             <input type="text" id="clientId" name="clientId" placeholder="xxxxxxxx-xxxx-...">
           </div>
-          <div class="field" style="flex:1">
+          <div class="form-group">
             <label for="clientSecret">Client Secret</label>
             <input type="password" id="clientSecret" name="clientSecret" placeholder="secret">
           </div>
-        </div>
-
-        <div class="form-row" style="margin-top: 16px;">
-          <button type="submit" class="btn" id="submitBtn">Generate Wiki</button>
         </div>
       </form>
       <div id="statusMsg" class="status-msg"></div>
       <div id="logPanel"><pre id="logContent"></pre></div>
     </div>
 
-    <div class="card">
-      <h2>Generated Wikis</h2>
+    <!-- Wikis -->
+    <div class="wikis-section">
+      <div class="section-title" style="margin-bottom:20px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Generated Wikis
+      </div>
       ${jobs.length === 0
-        ? "<p style='color:#999'>No wikis generated yet.</p>"
-        : `<table>
-        <thead><tr><th>Slug</th><th>Repository</th><th>Status</th><th>Progress</th><th>Pages</th><th>Last Synced</th><th>Wiki URL</th><th></th></tr></thead>
-        <tbody>${jobRows}</tbody>
-      </table>`}
+        ? `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><p>No wikis generated yet. Paste a repository URL above to get started.</p></div>`
+        : `<div class="wikis-grid">${jobCards}</div>`}
     </div>
   </div>
 
@@ -608,10 +766,10 @@ function renderDashboard(prefillRepo?: string): string {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Submitting...';
+      submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4m-3.93 7.07l-2.83-2.83M6.34 6.34L3.51 3.51"/></svg> Processing...';
       statusMsg.className = 'status-msg';
       logPanel.className = 'visible';
-      logContent.textContent = 'Starting...\\n';
+      logContent.textContent = 'Initializing...\\n';
 
       const body = { repoUrl: document.getElementById('repoUrl').value };
       const auth = authSelect.value;
@@ -628,7 +786,7 @@ function renderDashboard(prefillRepo?: string): string {
         const data = await res.json();
         if (res.ok) {
           statusMsg.className = 'status-msg visible info';
-          statusMsg.innerHTML = 'Job submitted — <strong>' + data.status + '</strong>. Streaming logs...';
+          statusMsg.innerHTML = 'Job submitted &mdash; streaming logs...';
           pollLogs(data.slug, data.id);
         } else {
           statusMsg.className = 'status-msg visible error';
@@ -640,7 +798,7 @@ function renderDashboard(prefillRepo?: string): string {
         statusMsg.textContent = 'Network error: ' + err.message;
       } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Generate Wiki';
+        submitBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate';
       }
     });
 
@@ -659,16 +817,16 @@ function renderDashboard(prefillRepo?: string): string {
 
           if (job.status === 'ready') {
             statusMsg.className = 'status-msg visible success';
-            statusMsg.innerHTML = 'Wiki ready! <a href="' + job.wikiUrl + '" target="_blank">' + job.wikiUrl + '</a> (' + job.pages + ' pages)';
+            statusMsg.innerHTML = 'Wiki ready! <a href="' + job.wikiUrl + '" target="_blank">' + job.wikiUrl + '</a> &mdash; ' + job.pages + ' pages generated';
             setTimeout(() => location.reload(), 3000);
             return;
           } else if (job.status === 'failed') {
             statusMsg.className = 'status-msg visible error';
-            statusMsg.textContent = 'Failed: ' + (job.error || 'Unknown');
+            statusMsg.textContent = 'Failed: ' + (job.error || 'Unknown error');
             return;
           }
           statusMsg.className = 'status-msg visible info';
-          statusMsg.innerHTML = 'Status: <strong>' + job.status + '</strong> — ' + (job.progress || '');
+          statusMsg.innerHTML = '<strong>' + job.status + '</strong> &mdash; ' + (job.progress || 'Processing...');
           setTimeout(check, 3000);
         } catch { setTimeout(check, 3000); }
       };
