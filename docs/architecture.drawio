@@ -1,0 +1,357 @@
+<mxfile host="app.diagrams.net" modified="2026-05-31T16:10:00.000Z" agent="Claude" version="24.0.0" type="device">
+  <diagram id="deepforge-architecture" name="Architecture">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="Deepforge — Architecture" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#1a1a2e;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="400" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Kubernetes Cluster boundary -->
+        <mxCell id="k8s-cluster" value="Kubernetes Cluster (Docker Desktop)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#4A90D9;strokeWidth=2;dashed=1;verticalAlign=top;fontStyle=1;fontSize=13;fontColor=#4A90D9;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="180" y="160" width="1240" height="680" as="geometry" />
+        </mxCell>
+
+        <!-- Namespace -->
+        <mxCell id="namespace" value="namespace: deepforge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F4FD;strokeColor=#4A90D9;strokeWidth=1;dashed=1;verticalAlign=top;fontStyle=2;fontSize=11;fontColor=#4A90D9;arcSize=4;" vertex="1" parent="1">
+          <mxGeometry x="210" y="200" width="1180" height="620" as="geometry" />
+        </mxCell>
+
+        <!-- =========================================================== -->
+        <!-- INGRESS NGINX -->
+        <!-- =========================================================== -->
+        <mxCell id="ingress" value="NGINX Ingress Controller" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#F57C00;strokeWidth=2;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="230" width="520" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ingress-rule1" value="deepforge.local → controller" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#666;" vertex="1" parent="1">
+          <mxGeometry x="550" y="255" width="200" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ingress-rule2" value="&lt;slug&gt;.deepforge.local → wiki-&lt;slug&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#666;" vertex="1" parent="1">
+          <mxGeometry x="800" y="255" width="250" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- =========================================================== -->
+        <!-- CONTROLLER POD -->
+        <!-- =========================================================== -->
+        <mxCell id="controller-pod" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#43A047;strokeWidth=2;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="260" y="330" width="500" height="360" as="geometry" />
+        </mxCell>
+
+        <mxCell id="controller-title" value="deepforge-controller (Pod)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=13;fontStyle=1;fontColor=#2E7D32;" vertex="1" parent="1">
+          <mxGeometry x="275" y="335" width="300" height="25" as="geometry" />
+        </mxCell>
+
+        <mxCell id="controller-sa" value="SA: deepforge-controller&#10;Role: deploy, svc, ingress CRUD" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=9;fontColor=#666;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="275" y="355" width="250" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Dashboard/API -->
+        <mxCell id="api" value="HTTP API + Dashboard&#10;:8080" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#43A047;strokeWidth=1;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="290" y="395" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Endpoints inside API -->
+        <mxCell id="endpoints" value="POST /api/generate&#10;GET /api/jobs&#10;GET /api/jobs/:slug/logs&#10;GET / (dashboard)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=9;fontColor=#555;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="290" y="450" width="200" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Pipeline -->
+        <mxCell id="pipeline-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1F8E9;strokeColor=#7CB342;strokeWidth=1;dashed=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="280" y="520" width="460" height="155" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pipeline-title" value="Generation Pipeline" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=11;fontStyle=1;fontColor=#558B2F;" vertex="1" parent="1">
+          <mxGeometry x="290" y="525" width="150" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Pipeline stages -->
+        <mxCell id="stage-clone" value="Clone" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7CB342;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="295" y="555" width="65" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-scan" value="Scan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7CB342;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="375" y="555" width="65" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-extract" value="Extract" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7CB342;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="455" y="555" width="65" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-resolve" value="Resolve" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7CB342;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="535" y="555" width="65" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-store" value="Store&#10;(SQLite)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7CB342;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="615" y="555" width="65" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-generate" value="Generate&#10;(LLM)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F9A825;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="610" width="80" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-assemble" value="Assemble&#10;(Docsify)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7CB342;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="610" width="80" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="stage-deploy" value="Deploy&#10;Wiki Pod" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1976D2;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="570" y="610" width="80" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Pipeline arrows -->
+        <mxCell id="arrow-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;containsPoint=1;strokeColor=#7CB342;strokeWidth=1;" edge="1" parent="1" source="stage-clone" target="stage-scan">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;strokeColor=#7CB342;strokeWidth=1;" edge="1" parent="1" source="stage-scan" target="stage-extract">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;strokeColor=#7CB342;strokeWidth=1;" edge="1" parent="1" source="stage-extract" target="stage-resolve">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;strokeColor=#7CB342;strokeWidth=1;" edge="1" parent="1" source="stage-resolve" target="stage-store">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;strokeColor=#F9A825;strokeWidth=1;" edge="1" parent="1" source="stage-store" target="stage-generate">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="647" y="600" />
+              <mxPoint x="410" y="600" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arrow-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;strokeColor=#7CB342;strokeWidth=1;" edge="1" parent="1" source="stage-generate" target="stage-assemble">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;strokeColor=#1976D2;strokeWidth=1;" edge="1" parent="1" source="stage-assemble" target="stage-deploy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- =========================================================== -->
+        <!-- WIKI PODS -->
+        <!-- =========================================================== -->
+        <mxCell id="wiki-pods-group" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EDE7F6;strokeColor=#7E57C2;strokeWidth=2;dashed=1;arcSize=6;" vertex="1" parent="1">
+          <mxGeometry x="840" y="330" width="520" height="310" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-pods-title" value="Per-Wiki Pods (dynamically created)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=13;fontStyle=1;fontColor=#5E35B1;" vertex="1" parent="1">
+          <mxGeometry x="855" y="335" width="300" height="25" as="geometry" />
+        </mxCell>
+
+        <!-- Wiki Pod 1 -->
+        <mxCell id="wiki-pod-1" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7E57C2;strokeWidth=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="865" y="375" width="230" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-1-title" value="wiki-jasontaylordev-cleanarchitecture" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=10;fontStyle=1;fontColor=#4A148C;" vertex="1" parent="1">
+          <mxGeometry x="875" y="380" width="220" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-1-container" value="wiki-server.js :8081&#10;(Docsify static server)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7E57C2;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="885" y="405" width="190" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-1-svc" value="Service: wiki-jasontaylordev-cleanarchitecture :80→8081" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#666;" vertex="1" parent="1">
+          <mxGeometry x="875" y="450" width="220" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-1-ingress" value="Ingress: jasontaylordev-cleanarchitecture.deepforge.local" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#E65100;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="875" y="468" width="220" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Wiki Pod 2 -->
+        <mxCell id="wiki-pod-2" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7E57C2;strokeWidth=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="865" y="510" width="230" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-2-title" value="wiki-nimblepros-eshoponweb" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;fontSize=10;fontStyle=1;fontColor=#4A148C;" vertex="1" parent="1">
+          <mxGeometry x="875" y="515" width="210" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-2-container" value="wiki-server.js :8081&#10;(Docsify static server)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#7E57C2;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="885" y="540" width="190" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-2-svc" value="Service: wiki-nimblepros-eshoponweb :80→8081" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#666;" vertex="1" parent="1">
+          <mxGeometry x="875" y="585" width="220" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-2-ingress" value="Ingress: nimblepros-eshoponweb.deepforge.local" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#E65100;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="875" y="603" width="220" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- More wikis indicator -->
+        <mxCell id="wiki-more" value="..." style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontColor=#7E57C2;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="440" width="40" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wiki-n" value="wiki-&lt;slug-N&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#7E57C2;strokeWidth=1;dashed=1;arcSize=8;fontSize=10;fontStyle=2;fontColor=#9C27B0;" vertex="1" parent="1">
+          <mxGeometry x="1115" y="490" width="130" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- =========================================================== -->
+        <!-- PVC -->
+        <!-- =========================================================== -->
+        <mxCell id="pvc" value="PersistentVolumeClaim&#10;deepforge-data (20Gi RWO)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#FCE4EC;strokeColor=#C62828;strokeWidth=2;fontSize=10;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="870" y="680" width="200" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pvc-contents" value="/data/repos/  /data/wikis/  /data/logs/  /data/jobs.json" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=9;fontColor=#666;fontFamily=Courier New;" vertex="1" parent="1">
+          <mxGeometry x="830" y="755" width="280" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- PVC connections -->
+        <mxCell id="pvc-to-controller" value="RW" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#C62828;strokeWidth=1;dashed=1;fontSize=9;fontColor=#C62828;" edge="1" parent="1" source="controller-pod" target="pvc">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="510" y="710" />
+              <mxPoint x="970" y="710" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="pvc-to-wikis" value="RO" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#C62828;strokeWidth=1;dashed=1;fontSize=9;fontColor=#C62828;" edge="1" parent="1" source="wiki-pods-group" target="pvc">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1100" y="660" />
+              <mxPoint x="1100" y="710" />
+              <mxPoint x="970" y="710" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- =========================================================== -->
+        <!-- EXTERNAL SERVICES -->
+        <!-- =========================================================== -->
+
+        <!-- User -->
+        <mxCell id="user" value="Developer" style="shape=mxgraph.basic.person;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#1565C0;strokeWidth=2;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="60" width="80" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- User to ingress -->
+        <mxCell id="user-to-ingress" value="HTTP" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#1565C0;strokeWidth=2;fontSize=10;fontColor=#1565C0;" edge="1" parent="1" source="user" target="ingress">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Ingress to controller -->
+        <mxCell id="ingress-to-controller" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#F57C00;strokeWidth=2;" edge="1" parent="1" source="ingress" target="api">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="600" y="310" />
+              <mxPoint x="380" y="310" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Ingress to wiki pods -->
+        <mxCell id="ingress-to-wikis" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#F57C00;strokeWidth=2;" edge="1" parent="1" source="ingress" target="wiki-pod-1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1000" y="310" />
+              <mxPoint x="980" y="310" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Controller deploys wiki pods -->
+        <mxCell id="controller-creates-wikis" value="kubectl apply&#10;(creates pods)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#1976D2;strokeWidth=2;dashed=1;dashPattern=5 3;fontSize=9;fontColor=#1976D2;fontStyle=1;" edge="1" parent="1" source="controller-pod" target="wiki-pods-group">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="790" y="500" />
+              <mxPoint x="830" y="500" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- =========================================================== -->
+        <!-- EXTERNAL: GitHub / Azure DevOps -->
+        <!-- =========================================================== -->
+        <mxCell id="git-repos" value="GitHub / Azure DevOps&#10;GitLab / Bitbucket" style="shape=cloud;whiteSpace=wrap;html=1;fillColor=#FFF8E1;strokeColor=#FF8F00;strokeWidth=2;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="320" width="190" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Clone arrow -->
+        <mxCell id="git-to-controller" value="git clone&#10;(PAT / SP auth)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#FF8F00;strokeWidth=2;fontSize=9;fontColor=#FF8F00;" edge="1" parent="1" source="git-repos" target="controller-pod">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- =========================================================== -->
+        <!-- EXTERNAL: LLM Provider -->
+        <!-- =========================================================== -->
+        <mxCell id="llm-provider" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F9A825;strokeWidth=2;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="20" y="500" width="190" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="llm-title" value="LLM Provider" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;fontSize=12;fontStyle=1;fontColor=#F57F17;" vertex="1" parent="1">
+          <mxGeometry x="20" y="505" width="190" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="llm-ollama" value="Ollama (local)&#10;host.docker.internal:11434" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F9A825;fontSize=9;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="35" y="530" width="160" height="35" as="geometry" />
+        </mxCell>
+
+        <mxCell id="llm-claude" value="Claude API&#10;(prompt caching)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F9A825;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="35" y="570" width="160" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="llm-openai" value="OpenAI / Azure OpenAI" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#F9A825;fontSize=9;" vertex="1" parent="1">
+          <mxGeometry x="35" y="605" width="160" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="llm-env" value="Switchable via LLM_PROVIDER env" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=8;fontColor=#666;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="35" y="638" width="160" height="15" as="geometry" />
+        </mxCell>
+
+        <!-- LLM arrow -->
+        <mxCell id="controller-to-llm" value="API calls&#10;(generate pages)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;strokeColor=#F9A825;strokeWidth=2;fontSize=9;fontColor=#F9A825;" edge="1" parent="1" source="stage-generate" target="llm-provider">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="250" y="630" />
+              <mxPoint x="250" y="580" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- =========================================================== -->
+        <!-- LEGEND -->
+        <!-- =========================================================== -->
+        <mxCell id="legend-box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#CCC;strokeWidth=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="1190" y="680" width="190" height="130" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-title" value="Legend" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="685" width="50" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-1" value="── Controller (static)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#43A047;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="705" width="150" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-2" value="── Wiki Pods (dynamic)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#7E57C2;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="723" width="150" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-3" value="── Ingress routing" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#F57C00;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="741" width="150" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-4" value="── Shared PVC" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#C62828;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="759" width="150" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-5" value="── External services" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#F9A825;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="777" width="150" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-6" value="- - kubectl apply (RBAC)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontColor=#1976D2;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="795" width="150" height="18" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
