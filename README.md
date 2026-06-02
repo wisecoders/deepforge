@@ -153,6 +153,27 @@ Set `LLM_PROVIDER` in `.env` or pass as environment variable:
 
 See [`.env.example`](.env.example) for all configuration options.
 
+### Model Quality Comparison
+
+The quality of generated wikis varies **dramatically** by model. Deepforge's pipeline sends rich graph context to the LLM — symbol relationships, code snippets with line numbers, type hierarchies, call chains — and larger models are far better at synthesizing this into coherent documentation.
+
+| Capability | Claude Sonnet / GPT-4o | Ollama (llama3 8B) |
+|------------|----------------------|---------------------|
+| **Architectural narratives** | Coherent multi-paragraph explanations connecting components, patterns, and design decisions | Shorter, surface-level descriptions that list symbols without explaining relationships |
+| **Mermaid diagrams** | Accurate class diagrams, sequence diagrams, and flowcharts with correct syntax | Frequently produces broken Mermaid syntax or overly simplistic diagrams |
+| **Code citations** | Precise `file:line` references woven naturally into explanations | Often omits citations or references incorrect line numbers |
+| **Cross-references** | Links related concepts across pages ("See [Section 3.2: Repository Pattern]") | Rarely generates meaningful cross-references |
+| **Context utilization** | Leverages the full graph context (128K+ token window) — callers, callees, type hierarchies | Limited context window (4-8K) means most graph context is truncated |
+| **Design pattern recognition** | Identifies and explains patterns (Repository, CQRS, Mediator, DI) from the code structure | May name patterns but struggles to explain how the code implements them |
+
+**Our recommendation:** Use **Claude Sonnet** or **GPT-4o** for production wikis. The difference is not incremental — it's the difference between documentation you'd actually use and documentation you'd rewrite.
+
+- **Claude Sonnet** — Best overall. Deepforge enables [prompt caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) automatically, so the system prompt and graph context are cached across page generations. This cuts costs by ~60% and reduces latency. A 40-page wiki typically costs $0.50-1.50.
+- **GPT-4o** — Comparable quality. Good alternative if you already have an OpenAI key.
+- **Ollama** — Free and private, great for testing the pipeline or internal/non-critical docs. Use `llama3:70b` or `mixtral` for better results than the default 8B.
+
+> The [live example wiki](https://wisecoders.github.io/deepforge/) was generated with Ollama llama3 8B. Re-generating the same repo with Claude Sonnet produces noticeably richer pages with accurate diagrams and deeper architectural analysis.
+
 ## CLI Reference
 
 ```bash
