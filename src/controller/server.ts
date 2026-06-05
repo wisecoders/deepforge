@@ -294,6 +294,156 @@ async function deployWikiPod(slug: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Wiki search / Ask — synthesize answers from wiki content
+// ---------------------------------------------------------------------------
+
+interface SearchResult {
+  answer: string;
+  sources: { page: string; title: string }[];
+}
+
+async function synthesizeAnswer(slug: string, wikiDir: string, question: string): Promise<SearchResult> {
+  // 1. Read all markdown pages from the wiki
+  const mdFiles = readdirSync(wikiDir).filter((f) => f.endsWith(".md") && f !== "_sidebar.md");
+  const pages: { filename: string; title: string; content: string }[] = [];
+
+  for (const file of mdFiles) {
+    const content = readFileSync(join(wikiDir, file), "utf-8");
+    // Extract title from first heading
+    const titleMatch = content.match(/^#\s+(.+)/m);
+    const title = titleMatch ? titleMatch[1].replace(/^\d+\.\s*/, "") : file.replace(".md", "");
+    pages.push({ filename: file, title, content });
+  }
+
+  // 2. Score pages by relevance (simple keyword matching)
+  const queryTerms = question.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+  const scored = pages.map((page) => {
+    const lower = page.content.toLowerCase();
+    let score = 0;
+    for (const term of queryTerms) {
+      const matches = lower.split(term).length - 1;
+      score += matches;
+    }
+    // Boost exact phrase matches
+    if (lower.includes(question.toLowerCase())) score += 50;
+    return { ...page, score };
+  });
+
+  // Take top 5 relevant pages
+  scored.sort((a, b) => b.score - a.score);
+  const relevant = scored.filter((p) => p.score > 0).slice(0, 5);
+
+  if (relevant.length === 0) {
+    return {
+      answer: "I couldn't find any relevant information in the wiki documentation for your question. Try rephrasing or asking about a specific component, pattern, or concept covered in the wiki.",
+      sources: [],
+    };
+  }
+
+  // 3. Build context (truncate pages to fit in context window)
+  const maxContextChars = 24000;
+  let contextBuilder = "";
+  const usedPages: { page: string; title: string }[] = [];
+
+  for (const page of relevant) {
+    const snippet = page.content.slice(0, Math.floor(maxContextChars / relevant.length));
+    contextBuilder += `\n\n--- PAGE: ${page.title} (${page.filename}) ---\n${snippet}`;
+    usedPages.push({ page: page.filename, title: page.title });
+    if (contextBuilder.length > maxContextChars) break;
+  }
+
+  // 4. Call LLM for synthesis
+  const systemPrompt = `You are a helpful code documentation assistant. You answer questions about a software project based on its wiki documentation.
+Your answers should be:
+- Concise and technical
+- Reference specific pages when relevant using [Page Title](filename) format
+- Include code snippets from the wiki when they help explain the answer
+- Use markdown formatting
+If the documentation doesn't contain enough information to fully answer the question, say so honestly.`;
+
+  const userPrompt = `Based on the following wiki documentation pages, answer this question:
+
+**Question:** ${question}
+
+**Documentation context:**
+${contextBuilder}
+
+Provide a clear, well-structured answer with references to the source pages.`;
+
+  const answer = await callLlm(systemPrompt, userPrompt);
+
+  return { answer, sources: usedPages };
+}
+
+async function callLlm(systemPrompt: string, userPrompt: string): Promise<string> {
+  const provider = process.env.LLM_PROVIDER ?? "ollama";
+  const timeoutMs = 120_000;
+
+  if (provider === "ollama") {
+    const baseUrl = process.env.OLLAMA_BASE_URL ?? "http://localhost:11434";
+    const model = process.env.OLLAMA_MODEL ?? "llama3";
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(`${baseUrl}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model,
+        prompt: `${systemPrompt}\n\n${userPrompt}`,
+        stream: false,
+        options: { num_predict: 2048 },
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const data = (await response.json()) as { response: string };
+    return data.response;
+  }
+
+  if (provider === "claude") {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const model = process.env.CLAUDE_MODEL ?? "claude-sonnet-4-20250514";
+    const response = await client.messages.create({
+      model,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    const block = response.content[0];
+    return block.type === "text" ? block.text : "";
+  }
+
+  if (provider === "openai" || provider === "azure") {
+    const { default: OpenAI } = await import("openai");
+    const clientOpts: any = { apiKey: process.env.OPENAI_API_KEY ?? process.env.AZURE_OPENAI_API_KEY };
+    if (provider === "azure") {
+      const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+      const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
+      const apiVersion = process.env.AZURE_OPENAI_API_VERSION ?? "2024-06-01";
+      clientOpts.baseURL = `${endpoint}/openai/deployments/${deployment}`;
+      clientOpts.defaultQuery = { "api-version": apiVersion };
+      clientOpts.defaultHeaders = { "api-key": clientOpts.apiKey ?? "" };
+    } else if (process.env.OPENAI_BASE_URL) {
+      clientOpts.baseURL = process.env.OPENAI_BASE_URL;
+    }
+    const client = new OpenAI(clientOpts);
+    const model = process.env.OPENAI_MODEL ?? process.env.AZURE_OPENAI_MODEL ?? "gpt-4o";
+    const response = await client.chat.completions.create({
+      model,
+      max_tokens: 2048,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+    return response.choices[0]?.message?.content ?? "";
+  }
+
+  throw new Error(`Unsupported LLM_PROVIDER: ${provider}`);
+}
+
+// ---------------------------------------------------------------------------
 // Wiki generation pipeline
 // ---------------------------------------------------------------------------
 
@@ -341,7 +491,13 @@ async function runGeneration(job: WikiJob): Promise<void> {
         jobLog(job.slug, line.trim());
 
         // Update status/progress based on output
-        if (line.includes("Planning wiki")) {
+        if (line.includes("Ingesting resolved edges:")) {
+          updateJob(job.id, { status: "indexing", progress: line.trim() });
+        } else if (line.includes("Ingested") && line.includes("files")) {
+          updateJob(job.id, { status: "indexing", progress: line.trim() });
+        } else if (line.includes("Resolving cross-file")) {
+          updateJob(job.id, { status: "indexing", progress: "Resolving cross-file references..." });
+        } else if (line.includes("Planning wiki")) {
           updateJob(job.id, { status: "indexing", progress: "Planning wiki structure..." });
         } else if (line.includes("Planned")) {
           updateJob(job.id, { status: "indexing", progress: line.trim() });
@@ -935,6 +1091,32 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     const job = getJob(id);
     if (job) json(res, 200, job);
     else json(res, 404, { error: "Job not found" });
+    return;
+  }
+
+  // POST /api/wikis/:slug/ask — wiki search with synthesized answer
+  if (req.method === "POST" && url.pathname.match(/^\/api\/wikis\/[^/]+\/ask$/)) {
+    const slug = url.pathname.split("/")[3];
+    const wikiDir = join(WIKIS_DIR, slug);
+
+    if (!existsSync(wikiDir)) {
+      json(res, 404, { error: "Wiki not found" });
+      return;
+    }
+
+    try {
+      const body = await parseBody(req);
+      const question = body.question as string;
+      if (!question || question.trim().length === 0) {
+        json(res, 400, { error: "question is required" });
+        return;
+      }
+
+      const answer = await synthesizeAnswer(slug, wikiDir, question.trim());
+      json(res, 200, answer);
+    } catch (err: any) {
+      json(res, 500, { error: err.message });
+    }
     return;
   }
 

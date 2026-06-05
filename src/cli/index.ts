@@ -175,11 +175,17 @@ async function runIndex(root: string, store: GraphStore): Promise<void> {
   console.log("Ingesting into store...");
   const allNodes = [];
   const allUnresolved = [];
+  const totalFiles = extraction.results.size;
+  let ingestedFiles = 0;
   for (const [filePath, result] of extraction.results) {
     const fileRecord = files.find((f) => f.path === filePath)!;
     store.ingestFile(fileRecord, result);
     allNodes.push(...result.nodes);
     allUnresolved.push(...result.unresolvedReferences);
+    ingestedFiles++;
+    if (ingestedFiles % 100 === 0 || ingestedFiles === totalFiles) {
+      console.log(`  Ingested ${ingestedFiles}/${totalFiles} files`);
+    }
   }
 
   console.log("Resolving cross-file references...");
@@ -193,6 +199,12 @@ async function runIndex(root: string, store: GraphStore): Promise<void> {
   );
 
   // Ingest resolved edges
+  const totalEdges = resolution.resolvedEdges.length;
+  if (totalEdges > 0) {
+    console.log(`Ingesting ${totalEdges} resolved edges into store...`);
+  }
+  let edgesIngested = 0;
+  const logInterval = Math.max(500, Math.floor(totalEdges / 20)); // ~20 log lines max
   for (const edge of resolution.resolvedEdges) {
     const sourceNode = store.getNode(edge.source);
     const targetNode = store.getNode(edge.target);
@@ -211,6 +223,11 @@ async function runIndex(root: string, store: GraphStore): Promise<void> {
           durationMs: 0,
         });
       }
+    }
+    edgesIngested++;
+    if (edgesIngested % logInterval === 0 || edgesIngested === totalEdges) {
+      const pct = ((edgesIngested / totalEdges) * 100).toFixed(0);
+      console.log(`  Ingesting resolved edges: ${edgesIngested}/${totalEdges} (${pct}%)`);
     }
   }
 
